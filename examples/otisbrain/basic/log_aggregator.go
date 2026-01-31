@@ -159,10 +159,16 @@ func (la *LogAggregator) getNamespaceLogFilesForAggregation(startTime, endTime t
 			// Look for log files in namespace-specific directory
 			nsLogPath := filepath.Join(logsDir, entry.Name())
 
-			// Look for the log file in the namespace directory
-			nsPattern := filepath.Join(nsLogPath, "basic.log")
-			if _, err := os.Stat(nsPattern); err == nil {
-				files = append(files, nsPattern)
+			// Look for the aggregation-ready log file in the namespace directory
+			nsAggregationPattern := filepath.Join(nsLogPath, "for_aggregation.log")
+			if _, err := os.Stat(nsAggregationPattern); err == nil {
+				files = append(files, nsAggregationPattern)
+			}
+
+			// Also look for the basic.log file in the namespace directory (for backward compatibility)
+			nsBasicPattern := filepath.Join(nsLogPath, "basic.log")
+			if _, err := os.Stat(nsBasicPattern); err == nil {
+				files = append(files, nsBasicPattern)
 			}
 		}
 	}
@@ -203,9 +209,9 @@ func (la *LogAggregator) parseFileForCriticalEvents(filePath string, startTime, 
 	for scanner.Scan() {
 		line := scanner.Text()
 
-		// Expected format: CRITICAL|timestamp|type|name|event|message
+		// Expected format: CRITICAL|timestamp|namespace|type|name|event|message
 		parts := strings.Split(line, "|")
-		if len(parts) >= 6 {
+		if len(parts) >= 7 {
 			if parts[0] == "CRITICAL" {
 				timestampStr := parts[1]
 				timestamp, err := time.Parse(time.RFC3339, timestampStr)
@@ -218,13 +224,19 @@ func (la *LogAggregator) parseFileForCriticalEvents(filePath string, startTime, 
 					continue
 				}
 
+				// Use namespace from the log entry if available, otherwise use extracted namespace
+				eventNamespace := parts[2]
+				if eventNamespace == "" {
+					eventNamespace = namespace
+				}
+
 				event := CriticalEvent{
 					Timestamp: timestamp,
-					Namespace: namespace,
-					Type:      parts[2],
-					Name:      parts[3],
-					Event:     parts[4],
-					Message:   parts[5],
+					Namespace: eventNamespace,
+					Type:      parts[3],
+					Name:      parts[4],
+					Event:     parts[5],
+					Message:   parts[6],
 				}
 
 				events = append(events, event)

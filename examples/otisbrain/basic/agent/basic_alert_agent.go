@@ -140,6 +140,7 @@ func (baa *BasicAlertAgent) writeCriticalEvent(obj *corev1.ObjectReference, even
 
 	// Write in format suitable for aggregation
 	baa.logger.WithFields(logrus.Fields{
+		"namespace": obj.Namespace,
 		"objType":   obj.Kind,
 		"objName":   obj.Name,
 		"eventType": eventType,

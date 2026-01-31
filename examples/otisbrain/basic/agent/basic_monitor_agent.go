@@ -214,11 +214,12 @@ func (bma *BasicMonitorAgent) monitorServices() error {
 
 // writeCriticalEvent writes critical events to a dedicated log file
 func (bma *BasicMonitorAgent) writeCriticalEvent(objType, objName, eventType, message string) {
-	bma.logger.Errorf("CRITICAL_EVENT_LOG - Type: %s, Name: %s, Event: %s, Message: %s",
-		objType, objName, eventType, message)
+	bma.logger.Errorf("CRITICAL_EVENT_LOG - Namespace: %s, Type: %s, Name: %s, Event: %s, Message: %s",
+		bma.namespace, objType, objName, eventType, message)
 
 	// Write in format suitable for aggregation
 	bma.logger.WithFields(logrus.Fields{
+		"namespace": bma.namespace,
 		"objType":   objType,
 		"objName":   objName,
 		"eventType": eventType,

@@ -197,9 +197,13 @@ func (bl *BasicLogger) WriteCriticalEvent(objType, objName, eventType, message s
 
 // WriteCriticalEventForAggregation writes critical events in a format suitable for aggregation
 func (bl *BasicLogger) WriteCriticalEventForAggregation(objType, objName, eventType, message string) {
+	// Extract namespace from basicLogPath (logs/basic/{namespace}/)
+	namespace := extractNamespaceFromBasicLogPath(bl.basicLogPath)
+
 	// Format the log entry for easy parsing during aggregation
-	logEntry := fmt.Sprintf("CRITICAL|%s|%s|%s|%s|%s\n",
+	logEntry := fmt.Sprintf("CRITICAL|%s|%s|%s|%s|%s|%s\n",
 		time.Now().Format(time.RFC3339),
+		namespace,
 		objType,
 		objName,
 		eventType,
@@ -213,6 +217,18 @@ func (bl *BasicLogger) WriteCriticalEventForAggregation(objType, objName, eventT
 		defer file.Close()
 		file.WriteString(logEntry)
 	}
+}
+
+// extractNamespaceFromBasicLogPath extracts the namespace from the basic log path
+func extractNamespaceFromBasicLogPath(basicLogPath string) string {
+	// Path format: logs/basic/{namespace}
+	parts := strings.Split(basicLogPath, string(os.PathSeparator))
+	for i, part := range parts {
+		if part == "basic" && i+1 < len(parts) {
+			return parts[i+1] // The next part should be the namespace
+		}
+	}
+	return "default" // fallback to default namespace
 }
 
 // GetBasicLogPath returns the path to basic logs

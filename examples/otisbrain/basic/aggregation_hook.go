@@ -30,9 +30,10 @@ func (hook *AggregationHook) Fire(entry *logrus.Entry) error {
 		objName, _ := entry.Data["objName"].(string)
 		eventType, _ := entry.Data["eventType"].(string)
 		message, _ := entry.Data["message"].(string)
+		namespace, _ := entry.Data["namespace"].(string)
 
 		if objType != "" && objName != "" && eventType != "" && message != "" {
-			hook.writeCriticalEventForAggregation(objType, objName, eventType, message, entry.Time)
+			hook.writeCriticalEventForAggregation(namespace, objType, objName, eventType, message, entry.Time)
 		}
 	}
 
@@ -40,16 +41,17 @@ func (hook *AggregationHook) Fire(entry *logrus.Entry) error {
 }
 
 // writeCriticalEventForAggregation writes critical events in a format suitable for aggregation
-func (hook *AggregationHook) writeCriticalEventForAggregation(objType, objName, eventType, message string, timestamp time.Time) {
+func (hook *AggregationHook) writeCriticalEventForAggregation(namespace, objType, objName, eventType, message string, timestamp time.Time) {
 	// Format the log entry for easy parsing during aggregation
-	logEntry := fmt.Sprintf("CRITICAL|%s|%s|%s|%s|%s\n", 
+	logEntry := fmt.Sprintf("CRITICAL|%s|%s|%s|%s|%s|%s\n",
 		timestamp.Format(time.RFC3339),
+		namespace,
 		objType,
 		objName,
 		eventType,
 		strings.ReplaceAll(message, "|", "_"), // Replace pipe character to avoid parsing issues
 	)
-	
+
 	// Write to a dedicated aggregation-ready file
 	aggregationLogPath := filepath.Join(hook.basicLogPath, "for_aggregation.log")
 	file, err := os.OpenFile(aggregationLogPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
