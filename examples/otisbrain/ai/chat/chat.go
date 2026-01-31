@@ -19,6 +19,7 @@ import (
 	"trpc.group/trpc-go/trpc-agent-go/tool"
 	"trpc.group/trpc-go/trpc-agent-go/tool/function"
 
+	"trpc.group/trpc-go/trpc-agent-go/examples/otisbrain/ai/tools"
 	"trpc.group/trpc-go/trpc-agent-go/examples/otisbrain/basic"
 	"trpc.group/trpc-go/trpc-agent-go/examples/otisbrain/config"
 	"trpc.group/trpc-go/trpc-agent-go/examples/otisbrain/utils"
@@ -62,7 +63,7 @@ func (c *AIChat) Run(ctx context.Context) error {
 // setup builds the runner with a model, tools, and the in-memory session store.
 func (c *AIChat) setup(_ context.Context) error {
 	// Create model instance
-	modelInstance := openai.New(c.modelName, 
+	modelInstance := openai.New(c.modelName,
 		openai.WithVariant(openai.Variant(c.variant)),
 		openai.WithAPIKey(c.config.LLM.APIKey),
 		openai.WithBaseURL(c.config.LLM.BaseURL),
@@ -85,6 +86,21 @@ func (c *AIChat) setup(_ context.Context) error {
 		function.WithDescription("Read all critical records from the monitoring system"),
 	)
 
+	// Initialize skill executor to load skills from the resources directory
+	skillExecutor := tools.NewSkillExecutor("../resources/skills")
+
+	// Attempt to load skills from YAML files
+	availableSkills, err := skillExecutor.GetAvailableSkills()
+	if err != nil {
+		// If skill loading fails, continue with basic tools only
+		c.logger.Printf("Warning: Could not load skills from directory: %v", err)
+	} else {
+		c.logger.Printf("Loaded %d skills from resources", len(availableSkills))
+	}
+
+	// Combine all tools
+	allTools := []tool.Tool{readSummaryTool, readAllRecordsTool}
+
 	genConfig := model.GenerationConfig{
 		MaxTokens:   utils.IntPtr(2000),
 		Temperature: utils.FloatPtr(0.7),
@@ -94,12 +110,12 @@ func (c *AIChat) setup(_ context.Context) error {
 	llmAgent := llmagent.New(
 		"otisbrain-assistant",
 		llmagent.WithModel(modelInstance),
-		llmagent.WithDescription("An AI assistant for OtisBrain K8S monitoring system."),
-		llmagent.WithInstruction(`You are an AI assistant for the OtisBrain K8S monitoring system. 
-			Help users understand cluster status, investigate issues, and suggest solutions. 
-			Use tools when helpful to access monitoring data.`),
+		llmagent.WithDescription("An AI assistant for the OtisBrain K8S monitoring system."),
+		llmagent.WithInstruction(`You are an AI assistant for the OtisBrain K8S monitoring system.
+			Help users understand cluster status, investigate issues, and suggest solutions.
+			Use tools when helpful to access monitoring data. The 'get_recent_critical_events' tool is particularly useful for getting recent critical events with filtering options.`),
 		llmagent.WithGenerationConfig(genConfig),
-		llmagent.WithTools([]tool.Tool{readSummaryTool, readAllRecordsTool}),
+		llmagent.WithTools(allTools),
 		llmagent.WithEnableParallelTools(false), // Disable parallel tools for simplicity
 	)
 
@@ -281,6 +297,11 @@ func (c *AIChat) displayContent(
 	*fullContent += content
 }
 
+// Tool request structures
+type ReadCriticalSummaryRequest struct{}
+
+type ReadAllCriticalRecordsRequest struct{}
+
 // Tool implementations
 func (c *AIChat) readCriticalSummary(ctx context.Context, _ struct{}) (string, error) {
 	reader := basic.NewAIAgentReader()
@@ -298,5 +319,22 @@ func (c *AIChat) readAllCriticalRecords(ctx context.Context, _ struct{}) (string
 		return fmt.Sprintf("Error reading critical records: %v", err), nil
 	}
 	return records, nil
+}
+
+// getRecentCriticalEvents retrieves recent critical events based on user request
+func (c *AIChat) getRecentCriticalEvents(ctx context.Context, _ struct{}) (string, error) {
+	// Default to last hour if no specific time range is provided
+	req := tools.GetRecentCriticalEventsRequest{
+		TimeRange:    "last_hour",
+		Severity:     "all",
+		ResourceType: "all",
+	}
+
+	result, err := tools.GetRecentCriticalEvents(ctx, req)
+	if err != nil {
+		return fmt.Sprintf("Error retrieving critical events: %v", err), nil
+	}
+
+	return tools.FormatCriticalEventsResult(result), nil
 }
 

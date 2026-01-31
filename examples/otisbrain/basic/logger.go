@@ -2,7 +2,6 @@ package basic
 
 import (
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -41,9 +40,8 @@ func NewBasicLogger(logLevel string) (*BasicLogger, error) {
 		return nil, fmt.Errorf("failed to open basic log file: %w", err)
 	}
 
-	// Set output to both file and console
-	multiWriter := io.MultiWriter(os.Stdout, logFile)
-	logger.SetOutput(multiWriter)
+	// Set output to file only (for background tasks)
+	logger.SetOutput(logFile)
 
 	// Set formatter
 	logger.SetFormatter(&logrus.TextFormatter{
@@ -59,6 +57,65 @@ func NewBasicLogger(logLevel string) (*BasicLogger, error) {
 		Logger:       logger,
 		basicLogPath: basicLogPath,
 	}, nil
+}
+
+// NewConsoleLogger creates a new logger that outputs only to console (for chat interface)
+func NewConsoleLogger(logLevel string) (*logrus.Logger, error) {
+	logger := logrus.New()
+
+	// Set log level
+	level, err := logrus.ParseLevel(logLevel)
+	if err != nil {
+		level = logrus.InfoLevel
+	}
+	logger.SetLevel(level)
+
+	// Set output to console only
+	logger.SetOutput(os.Stdout)
+
+	// Set formatter for console
+	logger.SetFormatter(&logrus.TextFormatter{
+		TimestampFormat: time.RFC3339,
+		FullTimestamp:   true,
+		ForceColors:     true, // Enable colors for console output
+	})
+
+	return logger, nil
+}
+
+// NewFileOnlyLogger creates a new logger that outputs only to files (for background tasks)
+func NewFileOnlyLogger(logLevel string, logPath string, fileName string) (*logrus.Logger, error) {
+	// Create logs directory if it doesn't exist
+	if err := os.MkdirAll(logPath, 0755); err != nil {
+		return nil, fmt.Errorf("failed to create logs directory: %w", err)
+	}
+
+	logger := logrus.New()
+
+	// Set log level
+	level, err := logrus.ParseLevel(logLevel)
+	if err != nil {
+		level = logrus.InfoLevel
+	}
+	logger.SetLevel(level)
+
+	// Create file for logs
+	logFilePath := filepath.Join(logPath, fileName)
+	logFile, err := os.OpenFile(logFilePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open log file: %w", err)
+	}
+
+	// Set output to file only
+	logger.SetOutput(logFile)
+
+	// Set formatter
+	logger.SetFormatter(&logrus.TextFormatter{
+		TimestampFormat: time.RFC3339,
+		FullTimestamp:   true,
+	})
+
+	return logger, nil
 }
 
 // WriteCriticalEvent writes critical events to a dedicated file in the basic path

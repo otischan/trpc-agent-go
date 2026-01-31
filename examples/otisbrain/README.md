@@ -53,6 +53,9 @@ otisbrain/
 ├── ai/chat/                            # AI聊天界面
 │   ├── chat.go                         # 交互式聊天界面
 │   └── silent_chat.go                  # 后台静默聊天接口
+├── ai/tools/                           # AI技能系统
+│   ├── critical_events.go              # 关键事件检索工具
+│   └── register.go                     # 技能注册系统
 ├── shared/                             # 共享组件
 │   ├── k8sclient/                      # K8S客户端封装
 │   │   ├── client.go                   # K8S客户端初始化
@@ -79,6 +82,12 @@ otisbrain/
 │       ├── events.log                  # 重要事件日志
 │       ├── pod_status_changes.log      # Pod状态变更日志
 │       └── anomaly_detections.log      # 异常检测日志
+├── resources/                          # 资源文件夹
+│   ├── mcpserver/                      # MCP服务器配置
+│   │   └── config.yaml                 # MCP服务器配置文件
+│   └── skills/                         # AI技能定义
+│       ├── get_recent_critical_events.yaml  # 关键事件检索技能
+│       └── get_cluster_resources.yaml       # 集群资源检索技能
 └── testdata/                           # 测试数据
     └── sample_manifests/               # 示例清单文件
 ```
@@ -266,6 +275,7 @@ logs/
 2. **问题诊断咨询**: 与AI助手对话，获取问题诊断和解决建议
 3. **运维操作指导**: 获取运维操作建议和最佳实践
 4. **异常信息查询**: 查询近期发生的异常事件和处理情况
+5. **技能化操作**: 通过自然语言调用预定义技能，如查询关键事件、资源使用情况等
 
 ## 部署方式
 
@@ -281,6 +291,7 @@ logs/
 4. **成本效益**: 后台监控与前台交互可独立配置和扩展
 5. **用户体验**: 提供直观的聊天界面，方便用户获取信息和指导
 6. **并行处理**: 后台任务与前台交互并行运行，互不影响
+7. **扩展性强**: 通过技能系统可轻松扩展AI助手的能力
 
 ## 未来发展方向
 
@@ -289,6 +300,8 @@ logs/
 - 更丰富的可视化界面
 - 机器学习驱动的异常检测
 - 更智能的容量规划算法
+- 扩展技能系统，增加更多运维操作技能
+- 支持MCP协议，实现更广泛的工具集成
 ```
 
 ## 快速开始
@@ -296,6 +309,16 @@ logs/
 ### 配置文件
 
 程序的所有参数现在都通过配置文件进行管理。配置文件位于 `config/config.yaml`，包含以下主要配置项：
+
+### 技能系统
+
+OtisBrain 集成了技能系统，允许AI助手执行特定任务：
+
+- **关键事件检索**: 通过 `get_recent_critical_events` 技能查询近期关键事件
+- **资源查询**: 通过 `get_cluster_resources` 技能获取集群资源使用情况
+- **扩展能力**: 可通过添加新的YAML定义和Go实现来扩展技能
+
+技能定义位于 `resources/skills/` 目录，AI助手可以自然地调用这些技能来完成特定任务。
 
 ```yaml
 log_level: info                    # 日志级别 (debug, info, warn, error)

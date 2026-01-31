@@ -1,0 +1,43 @@
+name: get_cluster_resources
+description: 获取集群资源使用情况
+version: 1.0.0
+author: OtisBrain Team
+category: monitoring
+tags: [kubernetes, resources, usage, metrics]
+
+inputs:
+  - name: namespace
+    type: string
+    required: false
+    default: "all"
+    description: 特定命名空间或"all"表示所有命名空间
+  - name: resource_type
+    type: string
+    required: false
+    default: "all"
+    description: 资源类型 (cpu, memory, pods, deployments, all)
+
+outputs:
+  - name: resources
+    type: object
+    description: 资源使用情况
+  - name: usage_percentages
+    type: object
+    description: 使用百分比
+  - name: recommendations
+    type: array
+    description: 优化建议
+
+execution:
+  type: function_call
+  function: getClusterResources
+  parameters:
+    namespace: "{{ inputs.namespace }}"
+    resource_type: "{{ inputs.resource_type }}"
+
+metadata:
+  created_at: "2026-01-31"
+  updated_at: "2026-01-31"
+  compatibility:
+    - trpc-agent-go >= 1.0.0
+  dependencies: []

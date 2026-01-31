@@ -4,7 +4,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"os"
 	"os/signal"
@@ -25,35 +24,23 @@ var (
 )
 
 // Global logger instance for chat interface
-var basicLogger *basic.BasicLogger
+var consoleLogger *logrus.Logger
+var fileLogger *basic.BasicLogger
 
-func initLogger(logLevel string) {
+func initConsoleLogger(logLevel string) {
 	var err error
-	basicLogger, err = basic.NewBasicLogger(logLevel)
+	consoleLogger, err = basic.NewConsoleLogger(logLevel)
 	if err != nil {
-		log.Fatalf("Failed to initialize basic logger: %v", err)
+		log.Fatalf("Failed to initialize console logger: %v", err)
 	}
 }
 
-// Create a separate logger for background tasks that writes to files only
-func createBackgroundLogger(logLevel string) *logrus.Logger {
-	logger := logrus.New()
-	level, err := logrus.ParseLevel(logLevel)
+func initFileLogger(logLevel string) {
+	var err error
+	fileLogger, err = basic.NewBasicLogger(logLevel)
 	if err != nil {
-		level = logrus.InfoLevel
+		log.Fatalf("Failed to initialize file logger: %v", err)
 	}
-	logger.SetLevel(level)
-
-	// Set output to ioutil.Discard to prevent console output
-	logger.SetOutput(ioutil.Discard)
-
-	// We'll add file hooks separately to write to specific log files
-	formatter := &logrus.TextFormatter{
-		FullTimestamp: true,
-	}
-	logger.SetFormatter(formatter)
-
-	return logger
 }
 
 func main() {
@@ -64,8 +51,9 @@ func main() {
 		log.Fatalf("Failed to load config: %v", err)
 	}
 
-	// Initialize logger with log level from config (for chat interface)
-	initLogger(cfg.LogLevel)
+	// Initialize both loggers with log level from config
+	initConsoleLogger(cfg.LogLevel)
+	initFileLogger(cfg.LogLevel)
 
 	// Use values from the monitoring config section
 	clientset, err := k8sclient.NewClient(cfg.Monitoring.Kubeconfig)
@@ -87,36 +75,33 @@ func main() {
 
 	// Initialize log aggregator with configurable interval
 	aggregationInterval := time.Duration(cfg.Monitoring.AggregationInterval) * time.Minute
-	logAggregator := basic.NewLogAggregatorWithInterval(basicLogger.Logger, basicLogger.GetBasicLogPath(), aggregationInterval)
+	logAggregator := basic.NewLogAggregatorWithInterval(fileLogger.Logger, fileLogger.GetBasicLogPath(), aggregationInterval)
 	logAggregator.Start()
 	defer logAggregator.Stop()
 
-	// Create a separate logger for background tasks to avoid console output
-	backgroundLogger := createBackgroundLogger(cfg.LogLevel)
-
-	// Initialize and run basic monitoring agent if enabled (in background with quiet logger)
+	// Initialize and run basic monitoring agent if enabled (in background with file-only logger)
 	if cfg.Monitoring.EnableMonitor {
 		// Start in a separate goroutine to avoid logging interfering with chat
 		go func() {
-			monitorAgent := basicagent.NewBasicMonitorAgent(clientset, cfg.Monitoring.Namespace, cfg, backgroundLogger)
+			monitorAgent := basicagent.NewBasicMonitorAgent(clientset, cfg.Monitoring.Namespace, cfg, fileLogger.Logger)
 			if err := monitorAgent.Start(ctx); err != nil {
-				basicLogger.Errorf("Error starting basic monitoring agent: %v", err)
+				consoleLogger.Errorf("Error starting basic monitoring agent: %v", err)
 			}
 		}()
 	}
 
-	// Initialize and run basic alert agent if enabled (in background with quiet logger)
+	// Initialize and run basic alert agent if enabled (in background with file-only logger)
 	if cfg.Monitoring.EnableAlert {
 		// Start in a separate goroutine to avoid logging interfering with chat
 		go func() {
-			alertAgent := basicagent.NewBasicAlertAgent(clientset, cfg.Monitoring.Namespace, cfg, backgroundLogger)
+			alertAgent := basicagent.NewBasicAlertAgent(clientset, cfg.Monitoring.Namespace, cfg, fileLogger.Logger)
 			if err := alertAgent.Start(ctx); err != nil {
-				basicLogger.Errorf("Error starting basic alert agent: %v", err)
+				consoleLogger.Errorf("Error starting basic alert agent: %v", err)
 			}
 		}()
 	}
 
-	// Initialize and run basic remediation agent if enabled (in background with quiet logger)
+	// Initialize and run basic remediation agent if enabled (in background with file-only logger)
 	if cfg.Monitoring.EnableRemediation {
 		// Run remediation checks periodically in background
 		go func() {
@@ -129,41 +114,41 @@ func main() {
 				select {
 				case <-ticker.C:
 					if err := remediationAgent.RunRemediationCycle(); err != nil {
-						basicLogger.Printf("Error running remediation cycle: %v", err)
+						consoleLogger.Printf("Error running remediation cycle: %v", err)
 					}
 				case <-ctx.Done():
-					basicLogger.Info("Stopping remediation agent...")
+					consoleLogger.Info("Stopping remediation agent...")
 					return
 				}
 			}
 		}()
 	}
 
-	// Initialize and run AI-enhanced monitoring agent if decision-making is enabled (in background with quiet logger)
+	// Initialize and run AI-enhanced monitoring agent if decision-making is enabled (in background with file-only logger)
 	if cfg.Monitoring.EnableDecision && cfg.LLM.Enabled {
 		// Start in a separate goroutine to avoid logging interfering with chat
 		go func() {
 			aiMonitorAgent, err := aiagent.NewAIEnhancedMonitorAgent(cfg)
 			if err != nil {
-				basicLogger.Printf("Error creating AI-enhanced monitoring agent: %v", err)
+				consoleLogger.Printf("Error creating AI-enhanced monitoring agent: %v", err)
 			} else {
 				if err := aiMonitorAgent.Start(ctx); err != nil {
-					basicLogger.Printf("Error starting AI-enhanced monitoring agent: %v", err)
+					consoleLogger.Printf("Error starting AI-enhanced monitoring agent: %v", err)
 				}
 			}
 		}()
 	}
 
-	// Initialize and run AI-enhanced alert agent if decision-making is enabled (in background with quiet logger)
+	// Initialize and run AI-enhanced alert agent if decision-making is enabled (in background with file-only logger)
 	if cfg.Monitoring.EnableDecision && cfg.LLM.Enabled {
 		// Start in a separate goroutine to avoid logging interfering with chat
 		go func() {
 			aiAlertAgent, err := aiagent.NewAIEnhancedAlertAgent(cfg)
 			if err != nil {
-				basicLogger.Printf("Error creating AI-enhanced alert agent: %v", err)
+				consoleLogger.Printf("Error creating AI-enhanced alert agent: %v", err)
 			} else {
 				if err := aiAlertAgent.Start(ctx); err != nil {
-					basicLogger.Printf("Error starting AI-enhanced alert agent: %v", err)
+					consoleLogger.Printf("Error starting AI-enhanced alert agent: %v", err)
 				}
 			}
 		}()
@@ -176,12 +161,12 @@ func main() {
 		fmt.Println("🚀 OtisBrain AI Assistant Started!")
 		fmt.Println("Type your questions below. Type '/exit' to quit.\n")
 
-		// Create the interactive chat instance
-		aiChat := chat.NewAIChat(cfg, basicLogger)
+		// Create the interactive chat instance with console logger
+		aiChat := chat.NewAIChat(cfg, &basic.BasicLogger{Logger: consoleLogger})
 
 		// Run the chat interface in the main thread (foreground) - this blocks
 		if err := aiChat.Run(ctx); err != nil {
-			basicLogger.Errorf("AI Chat error: %v", err)
+			consoleLogger.Errorf("AI Chat error: %v", err)
 		}
 	} else {
 		fmt.Println("LLM is not enabled in config. Chat interface will not start.")
@@ -191,5 +176,5 @@ func main() {
 		<-ctx.Done()
 	}
 
-	basicLogger.Info("Application stopped gracefully")
+	consoleLogger.Info("Application stopped gracefully")
 }

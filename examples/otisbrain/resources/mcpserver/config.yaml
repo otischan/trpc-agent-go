@@ -1,0 +1,37 @@
+# MCP Server Configuration
+server:
+  port: 3000
+  host: "0.0.0.0"
+  cors_enabled: true
+  cors_origins:
+    - "*"
+
+logging:
+  level: info
+  format: json
+  output: stdout
+
+skills:
+  enabled: true
+  directory: "../resources/skills"
+  auto_reload: true
+
+authentication:
+  enabled: false
+  secret: "your-secret-key-here"
+
+endpoints:
+  - path: "/v1alpha1/tools"
+    methods: ["GET", "POST"]
+    description: "Skills endpoint for external tools"
+  - path: "/health"
+    methods: ["GET"]
+    description: "Health check endpoint"
+
+middleware:
+  rate_limiting:
+    enabled: true
+    requests_per_minute: 100
+  request_logging:
+    enabled: true
+    exclude_paths: ["/health"]
