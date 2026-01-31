@@ -18,6 +18,8 @@ import (
 	"trpc.group/trpc-go/trpc-agent-go/runner"
 	sessioninmemory "trpc.group/trpc-go/trpc-agent-go/session/inmemory"
 	"trpc.group/trpc-go/trpc-agent-go/skill"
+	"trpc.group/trpc-go/trpc-agent-go/tool/mcp"
+	tmcp "trpc.group/trpc-go/trpc-mcp-go"
 
 	"trpc.group/trpc-go/trpc-agent-go/examples/otisbrain/ai/tools"
 	"trpc.group/trpc-go/trpc-agent-go/examples/otisbrain/basic"
@@ -36,6 +38,7 @@ type AIChat struct {
 	config         *config.Config
 	logger         *basic.BasicLogger
 	skillRepo      skill.Repository
+	mcpToolSets    []*mcp.ToolSet
 }
 
 // NewAIChat creates a new AI chat instance
@@ -54,15 +57,22 @@ func (c *AIChat) Run(ctx context.Context) error {
 	if err := c.setup(ctx); err != nil {
 		return fmt.Errorf("setup failed: %w", err)
 	}
-	
-	// Close runner when chat ends
-	defer c.runner.Close()
-	
+
+	// Close runner and MCP toolsets when chat ends
+	defer func() {
+		for _, toolSet := range c.mcpToolSets {
+			if toolSet != nil {
+				toolSet.Close()
+			}
+		}
+		c.runner.Close()
+	}()
+
 	return c.startChat(ctx)
 }
 
 // setup builds the runner with a model, skills, and the in-memory session store.
-func (c *AIChat) setup(_ context.Context) error {
+func (c *AIChat) setup(ctx context.Context) error {
 	// Create model instance
 	modelInstance := openai.New(c.modelName,
 		openai.WithVariant(openai.Variant(c.variant)),
@@ -98,6 +108,43 @@ func (c *AIChat) setup(_ context.Context) error {
 		c.skillRepo = repo  // Store the repository for later use
 	}
 
+	// Initialize MCP toolsets based on the list of servers in config
+	var toolSets []tool.ToolSet
+	c.mcpToolSets = []*mcp.ToolSet{} // Initialize the slice
+
+	for _, server := range c.config.MCP.Servers {
+		if server.Enabled {
+			mcpToolSet := mcp.NewMCPToolSet(
+				mcp.ConnectionConfig{
+					Transport: server.Transport,
+					ServerURL: server.ServerURL,
+					Timeout:   time.Duration(server.Timeout) * time.Second,
+					Headers:   server.Headers,
+				},
+				mcp.WithName(server.Name), // Use the name from config for the toolset
+				// Optionally add tool filtering here if needed
+				// mcp.WithToolFilterFunc(tool.NewIncludeToolNamesFilter("tool1", "tool2")),
+				mcp.WithMCPOptions(
+					// WithSimpleRetry(3): Uses default settings with 3 retry attempts
+					// - MaxRetries: 3 (range: 0-10)
+					// - InitialBackoff: 500ms (default, range: 1ms-30s)
+					// - BackoffFactor: 2.0 (default, range: 1.0-10.0)
+					// - MaxBackoff: 8s (default, range: up to 5 minutes)
+					// Retry sequence: 500ms -> 1s -> 2s (total max delay: ~3.5s)
+					tmcp.WithSimpleRetry(3),
+				),
+			)
+
+			if err := mcpToolSet.Init(ctx); err != nil {
+				c.logger.Printf("Warning: Failed to initialize MCP toolset '%s': %v", server.Name, err)
+			} else {
+				c.logger.Printf("MCP Toolset '%s' initialized successfully with transport: %s", server.Name, server.Transport)
+				toolSets = append(toolSets, mcpToolSet)
+				c.mcpToolSets = append(c.mcpToolSets, mcpToolSet)
+			}
+		}
+	}
+
 	genConfig := model.GenerationConfig{
 		MaxTokens:   utils.IntPtr(2000),
 		Temperature: utils.FloatPtr(0.7),
@@ -118,6 +165,11 @@ func (c *AIChat) setup(_ context.Context) error {
 	// Add skills support if repository is available
 	if repo != nil {
 		llmAgentOptions = append(llmAgentOptions, llmagent.WithSkills(repo))
+	}
+
+	// Add tool sets if any are configured
+	if len(toolSets) > 0 {
+		llmAgentOptions = append(llmAgentOptions, llmagent.WithToolSets(toolSets))
 	}
 
 	llmAgent := llmagent.New(

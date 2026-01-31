@@ -9,6 +9,15 @@ llm:
   base_url: ""
   enabled: true
 
+mcp:
+  servers:
+    - name: "k8s-monitoring-mcp"
+      enabled: false
+      transport: "streamable_http"
+      server_url: "http://localhost:3000/mcp"
+      timeout: 10
+      headers: {}
+
 rules:
   alert_rules_file: "./rules/alert_rules.yaml"
   remediation_rules_file: "./rules/remediation_rules.yaml"

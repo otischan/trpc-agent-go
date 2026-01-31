@@ -13,6 +13,7 @@ type Config struct {
 	Namespace     string     `yaml:"namespace"`
 	Kubeconfig    string     `yaml:"kubeconfig"`
 	LLM           LLM        `yaml:"llm"`
+	MCP           MCP        `yaml:"mcp"`
 	Rules         Rules      `yaml:"rules"`
 	Basic         Basic      `yaml:"basic"`
 	Monitoring    Monitoring `yaml:"monitoring"`
@@ -24,6 +25,21 @@ type LLM struct {
 	APIKey    string `yaml:"api_key"`
 	BaseURL   string `yaml:"base_url"`
 	Enabled   bool   `yaml:"enabled"`
+}
+
+// MCPServer holds individual MCP server configuration
+type MCPServer struct {
+	Name      string            `yaml:"name"`
+	Enabled   bool              `yaml:"enabled"`
+	Transport string            `yaml:"transport"`
+	ServerURL string            `yaml:"server_url"`
+	Timeout   int               `yaml:"timeout"` // in seconds
+	Headers   map[string]string `yaml:"headers"`
+}
+
+// MCP holds MCP-specific configurations (now a list of servers)
+type MCP struct {
+	Servers []MCPServer `yaml:"servers"`
 }
 
 // Rules holds rule engine configurations
@@ -82,6 +98,18 @@ func getDefaultConfig() *Config {
 			APIKey:  "",
 			BaseURL: "",
 			Enabled: false,
+		},
+		MCP: MCP{
+			Servers: []MCPServer{
+				{
+					Name:      "default-mcp-server",
+					Enabled:   false,
+					Transport: "streamable_http",
+					ServerURL: "http://localhost:3000/mcp",
+					Timeout:   10,
+					Headers:   make(map[string]string),
+				},
+			},
 		},
 		Rules: Rules{
 			AlertRulesFile:       "./rules/alert_rules.yaml",
