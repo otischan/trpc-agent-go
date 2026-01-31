@@ -87,14 +87,15 @@ type Basic struct {
 
 // Monitoring holds monitoring-specific configurations
 type Monitoring struct {
-	EnableMonitor       bool `yaml:"enable_monitor"`
-	EnableAlert         bool `yaml:"enable_alert"`
-	EnableRemediation   bool `yaml:"enable_remediation"`
-	EnableDecision      bool `yaml:"enable_decision"`
-	Namespace           string `yaml:"namespace"`
-	Kubeconfig          string `yaml:"kubeconfig"`
-	MetricsPort         int `yaml:"metrics_port"`
-	AggregationInterval int `yaml:"aggregation_interval_minutes"` // Interval for aggregating logs in minutes
+	EnableMonitor       bool     `yaml:"enable_monitor"`
+	EnableAlert         bool     `yaml:"enable_alert"`
+	EnableRemediation   bool     `yaml:"enable_remediation"`
+	EnableDecision      bool     `yaml:"enable_decision"`
+	Namespace           string   `yaml:"namespace"`           // Single namespace (deprecated, kept for backward compatibility)
+	Namespaces          []string `yaml:"namespaces"`          // Multiple namespaces for monitoring
+	Kubeconfig          string   `yaml:"kubeconfig"`
+	MetricsPort         int      `yaml:"metrics_port"`
+	AggregationInterval int      `yaml:"aggregation_interval_minutes"` // Interval for aggregating logs in minutes
 }
 
 // LoadConfig loads configuration from a YAML file
@@ -156,6 +157,7 @@ func getDefaultConfig() *Config {
 			EnableRemediation:   false,
 			EnableDecision:      false,
 			Namespace:           "default",
+			Namespaces:          []string{"default"}, // Default to single namespace for backward compatibility
 			Kubeconfig:          "",
 			MetricsPort:         8080,
 			AggregationInterval: 10, // Default to 10 minutes

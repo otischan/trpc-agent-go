@@ -18,8 +18,13 @@ type BasicLogger struct {
 
 // NewBasicLogger creates a new logger that outputs to the basic path
 func NewBasicLogger(logLevel string) (*BasicLogger, error) {
+	return NewBasicLoggerWithNamespace(logLevel, "default")
+}
+
+// NewBasicLoggerWithNamespace creates a new logger that outputs to a namespace-specific path
+func NewBasicLoggerWithNamespace(logLevel, namespace string) (*BasicLogger, error) {
 	// Create basic logs directory if it doesn't exist
-	basicLogPath := "logs/basic"
+	basicLogPath := filepath.Join("logs", "basic", namespace)
 	if err := os.MkdirAll(basicLogPath, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create basic logs directory: %w", err)
 	}
@@ -56,6 +61,48 @@ func NewBasicLogger(logLevel string) (*BasicLogger, error) {
 	return &BasicLogger{
 		Logger:       logger,
 		basicLogPath: basicLogPath,
+	}, nil
+}
+
+// NewBasicLoggerWithCustomPath creates a new basic logger with a custom path
+func NewBasicLoggerWithCustomPath(logLevel string, customPath string) (*BasicLogger, error) {
+	logger := logrus.New()
+
+	// Set log level
+	level, err := logrus.ParseLevel(logLevel)
+	if err != nil {
+		level = logrus.InfoLevel
+	}
+	logger.SetLevel(level)
+
+	// Create logs directory if it doesn't exist
+	if err := os.MkdirAll(customPath, 0755); err != nil {
+		return nil, fmt.Errorf("failed to create logs directory: %w", err)
+	}
+
+	// Create file for basic logs
+	logFileName := filepath.Join(customPath, fmt.Sprintf("basic_%s.log", time.Now().Format("20060102_150405")))
+	logFile, err := os.OpenFile(logFileName, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open basic log file: %w", err)
+	}
+
+	// Set output to file only (for background tasks)
+	logger.SetOutput(logFile)
+
+	// Set formatter
+	logger.SetFormatter(&logrus.TextFormatter{
+		TimestampFormat: time.RFC3339,
+		FullTimestamp:   true,
+	})
+
+	// Add aggregation hook
+	aggregationHook := NewAggregationHook(customPath)
+	logger.AddHook(aggregationHook)
+
+	return &BasicLogger{
+		Logger:       logger,
+		basicLogPath: customPath,
 	}, nil
 }
 

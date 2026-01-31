@@ -122,6 +122,7 @@ otisbrain/
 此服务专注于后台持续运行的K8S监控和运维功能：
 
 - **基础监控代理**：监控Pod状态、Deployment副本数、Service可用性等
+- **多命名空间监控**：支持同时监控多个命名空间（通过配置文件中的namespaces字段指定）
 - **事件监听**：监听K8S API的事件流，捕获异常事件
 - **告警处理**：根据预定义规则生成告警
 - **自动修复**：执行预定义的修复操作（如重启Pod、调整副本数）
@@ -135,6 +136,7 @@ otisbrain/
 - 高可用性：独立运行，不受 LLM 服务状态影响
 - 性能优化：专门处理监控任务，无需承担 LLM 通信开销
 - 可扩展性：可根据监控负载独立扩展
+- **多命名空间支持**：可同时监控多个命名空间，每个命名空间的日志存储在独立的目录中
 
 #### 聊天服务 (chat-service)
 
@@ -223,6 +225,7 @@ logs/
    - 基础监控代理记录Pod状态、资源使用情况等信息
    - 事件监听器捕获并记录关键事件，包括对象名称、时间戳、事件类型等
    - 告警和修复操作的日志也记录在此目录
+   - **多命名空间支持**：每个命名空间的日志将存储在独立的子目录中 (`logs/basic/{namespace}/`)
 
 2. **关键信息提取**：
    - 基础层从K8S API采集的关键信息（如事件、Pod状态变化）会被整理并存储在 `logs/critical_events/` 目录
@@ -238,6 +241,11 @@ logs/
 4. **日志轮转与清理**：
    - 系统会自动管理日志文件大小，当日志文件达到一定大小时会进行轮转
    - 旧的日志文件会被压缩归档，保留最近的活动日志以节省磁盘空间
+
+5. **多命名空间日志聚合**：
+   - 日志聚合器会从所有命名空间的日志目录中收集信息
+   - 生成的汇总报告会按命名空间分组显示关键事件
+   - 便于管理员跨命名空间分析问题模式
 
 ### 设计理念
 
@@ -489,7 +497,7 @@ logs/
 ```yaml
 log_level: info                    # 日志级别 (debug, info, warn, error)
 metrics_port: 8080                 # 暴露Prometheus指标的端口
-namespace: default                 # 监控的目标命名空间
+namespace: default                 # 监控的目标命名空间 (已弃用，请使用 monitoring.namespaces)
 kubeconfig: ""                     # K8S集群认证配置文件路径
 
 llm:                               # 大语言模型配置（仅用于AI增强功能）
@@ -512,11 +520,19 @@ monitoring:                        # 监控代理配置
   enable_alert: true               # 是否启用告警代理
   enable_remediation: false        # 是否启用修复代理
   enable_decision: false           # 是否启用决策代理
-  namespace: default               # 监控的命名空间
+  namespace: default               # 监控的命名空间 (已弃用，请使用 namespaces)
+  namespaces: ["default", "kube-system", "monitoring"] # 监控的命名空间列表 (支持多个命名空间)
   kubeconfig: ""                   # K8S集群认证配置文件路径
   metrics_port: 8080               # 暴露指标的端口
   aggregation_interval_minutes: 10 # 日志聚合间隔（分钟），即每10分钟对关键事件进行一次汇总
 ```
+
+**多命名空间监控说明**：
+- 新增 `namespaces` 字段，支持同时监控多个命名空间
+- 每个命名空间的日志将存储在独立的目录中 (`logs/basic/{namespace}/`)
+- 为了向后兼容，如果未设置 `namespaces` 字段，系统将继续使用 `namespace` 字段
+- 设置为 `["all"]` 可以监控集群中的所有命名空间
+- 日志聚合器会从所有命名空间的日志目录中收集信息并生成汇总报告
 
 ### 聊天服务配置
 

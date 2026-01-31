@@ -9,7 +9,6 @@ import (
 	"os/signal"
 	"path/filepath"
 	"syscall"
-	"time"
 
 	"github.com/sirupsen/logrus"
 	"trpc.group/trpc-go/trpc-agent-go/examples/otisbrain/ai/agent"

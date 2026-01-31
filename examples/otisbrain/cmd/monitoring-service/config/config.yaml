@@ -1,6 +1,6 @@
 log_level: info                    # 日志级别 (debug, info, warn, error)
 metrics_port: 8080                 # 暴露Prometheus指标的端口
-namespace: default                 # 监控的目标命名空间
+namespace: default                 # 监控的目标命名空间 (deprecated, use monitoring.namespaces instead)
 kubeconfig: ""                     # K8S集群认证配置文件路径
 
 llm:                               # 大语言模型配置（仅用于AI增强功能）
@@ -23,7 +23,8 @@ monitoring:                        # 监控代理配置
   enable_alert: true               # 是否启用告警代理
   enable_remediation: false        # 是否启用修复代理
   enable_decision: false           # 是否启用决策代理
-  namespace: default               # 监控的命名空间
+  namespace: default               # 监控的命名空间 (deprecated, use namespaces instead)
+  namespaces: ["default", "kube-system", "monitoring"] # 监控的命名空间列表 (支持多个命名空间)
   kubeconfig: ""                   # K8S集群认证配置文件路径
   metrics_port: 8080               # 暴露指标的端口
   aggregation_interval_minutes: 10 # 日志聚合间隔（分钟），即每10分钟对关键事件进行一次汇总
