@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -72,14 +73,19 @@ func (c *AIChat) setup(_ context.Context) error {
 	sessionService := sessioninmemory.NewSessionService()
 
 	// Skills repository - dynamically load skills from resources directory
-	skillsRoot := "./resources/skills"  // Use relative path from executable location
+	// Use project root from environment variable to ensure correct path resolution
+	projectRoot := os.Getenv("OTISBRAIN_PROJECT_ROOT")
+	if projectRoot == "" {
+		projectRoot = "."  // fallback to current directory
+	}
+	skillsRoot := filepath.Join(projectRoot, "resources", "skills")
 	repo, err := skill.NewFSRepository(skillsRoot)
 	if err != nil {
 		c.logger.Printf("Warning: Could not initialize skills repository: %v", err)
 		c.logger.Printf("Attempting to initialize skills executor as fallback...")
 
-		// Initialize skills executor as fallback mechanism
-		skillExecutor := tools.NewSkillExecutor("./resources/skills")
+		// Initialize skills executor as fallback mechanism using the same path
+		skillExecutor := tools.NewSkillExecutor(skillsRoot)
 		availableSkills, err := skillExecutor.GetAvailableSkills()
 		if err != nil {
 			c.logger.Printf("Fallback skills initialization also failed: %v", err)
@@ -317,7 +323,14 @@ func (c *AIChat) listSkills(ctx context.Context) error {
 
 	// Since the repository doesn't have a List method, use our custom skill executor
 	fmt.Println("  🔄 Using fallback method to load skills...")
-	skillExecutor := tools.NewSkillExecutor("./resources/skills")
+
+	// Use project root from environment variable to ensure correct path resolution
+	projectRoot := os.Getenv("OTISBRAIN_PROJECT_ROOT")
+	if projectRoot == "" {
+		projectRoot = "."  // fallback to current directory
+	}
+	skillsPath := filepath.Join(projectRoot, "resources", "skills")
+	skillExecutor := tools.NewSkillExecutor(skillsPath)
 	availableSkills, err := skillExecutor.GetAvailableSkills()
 	if err != nil {
 		fmt.Printf("  ❌ Could not load skills: %v\n", err)
