@@ -137,4 +137,12 @@ func (baa *BasicAlertAgent) determineSeverity(event *corev1.Event) string {
 func (baa *BasicAlertAgent) writeCriticalEvent(obj *corev1.ObjectReference, eventType, message string) {
 	baa.logger.Errorf("CRITICAL_EVENT_LOG - Object: %s/%s (%s), Event: %s, Message: %s",
 		obj.Namespace, obj.Name, obj.Kind, eventType, message)
+
+	// Write in format suitable for aggregation
+	baa.logger.WithFields(logrus.Fields{
+		"objType":   obj.Kind,
+		"objName":   obj.Name,
+		"eventType": eventType,
+		"message":   message,
+	}).Error("CRITICAL_EVENT")
 }

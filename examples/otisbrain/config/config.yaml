@@ -17,3 +17,13 @@ basic:
   interval_seconds: 30
   max_retries: 3
   dry_run: false
+
+monitoring:
+  enable_monitor: true
+  enable_alert: true
+  enable_remediation: false
+  enable_decision: false
+  namespace: default
+  kubeconfig: ""
+  metrics_port: 8080
+  aggregation_interval_minutes: 10

@@ -287,74 +287,113 @@ logs/
 
 ## 快速开始
 
-### 命令行参数
+### 配置文件
 
-程序支持以下命令行参数来控制不同代理的能力：
+程序的所有参数现在都通过配置文件进行管理。配置文件位于 `config/config.yaml`，包含以下主要配置项：
 
+```yaml
+log_level: info                    # 日志级别 (debug, info, warn, error)
+metrics_port: 8080                 # 暴露Prometheus指标的端口
+namespace: default                 # 监控的目标命名空间
+kubeconfig: ""                     # K8S集群认证配置文件路径
+
+llm:                               # 大语言模型配置
+  model: gpt-4o-mini               # 使用的AI模型
+  api_key: ""                      # AI模型API密钥
+  base_url: ""                     # AI模型API基础URL
+  enabled: false                   # 是否启用AI功能
+
+rules:                             # 规则引擎配置
+  alert_rules_file: "./rules/alert_rules.yaml"       # 告警规则文件路径
+  remediation_rules_file: "./rules/remediation_rules.yaml" # 修复规则文件路径
+
+basic:                             # 基础监控配置
+  interval_seconds: 30             # 监控间隔秒数
+  max_retries: 3                   # 最大重试次数
+  dry_run: false                   # 是否演练模式（不执行实际操作）
+
+monitoring:                        # 监控代理配置
+  enable_monitor: true             # 是否启用监控代理
+  enable_alert: true               # 是否启用告警代理
+  enable_remediation: false        # 是否启用修复代理
+  enable_decision: false           # 是否启用决策代理
+  namespace: default               # 监控的命名空间
+  kubeconfig: ""                   # K8S集群认证配置文件路径
+  metrics_port: 8080               # 暴露指标的端口
+  aggregation_interval_minutes: 10 # 日志聚合间隔（分钟），即每10分钟对关键事件进行一次汇总
 ```
-Usage: otisbrain [options]
 
-Options:
-  -kubeconfig string
-        Path to the kubeconfig file (default: ~/.kube/config)
-  -namespace string
-        Target namespace to monitor (default: "default")
-  -enable-monitor
-        Enable K8S monitoring agent (default: true)
-  -enable-alert
-        Enable alert handling agent (default: true)
-  -enable-remediation
-        Enable auto-remediation agent (default: false)
-  -enable-decision
-        Enable decision-making agent (default: false)
-  -metrics-port int
-        Port to expose Prometheus metrics (default: 8080)
-  -config string
-        Path to the configuration file (default: "./config/config.yaml")
-  -log-level string
-        Log level (debug, info, warn, error) (default: "info")
-  -model string
-        LLM model to use for AI agents (default: "gpt-4o-mini")
-  -max-retry int
-        Maximum retry attempts for failed operations (default: 3)
-  -dry-run
-        Run in dry-run mode without performing actual operations (default: false)
+### 配置说明
+
+- **log_level**: 控制日志输出级别，支持 debug, info, warn, error
+- **metrics_port**: Prometheus指标暴露端口
+- **namespace**: 要监控的Kubernetes命名空间
+- **kubeconfig**: K8S集群认证配置文件路径
+- **llm**: 大语言模型相关配置，包括模型类型、API密钥等
+- **rules**: 规则引擎配置，指定告警和修复规则文件位置
+- **basic**: 基础监控配置，包括监控间隔、重试次数等
+- **monitoring**: 监控代理配置，控制各个代理的启停状态
+- **aggregation_interval_minutes**: 关键事件聚合间隔，控制每多少分钟对basic路径下的日志进行整理、去重和汇总
+
+### 示例配置
+
+```yaml
+# 生产环境示例配置
+log_level: info
+metrics_port: 8080
+namespace: production
+
+llm:
+  model: gpt-4o
+  api_key: "your-api-key-here"
+  base_url: "https://api.openai.com/v1"
+  enabled: true
+
+basic:
+  interval_seconds: 15
+  max_retries: 5
+  dry_run: false
+
+monitoring:
+  enable_monitor: true
+  enable_alert: true
+  enable_remediation: true
+  enable_decision: true
+  namespace: production
+  aggregation_interval_minutes: 10  # 每10分钟聚合一次关键事件
 ```
 
-### 参数说明
+```yaml
+# 测试环境示例配置
+log_level: debug
+namespace: test
 
-- **-kubeconfig**: 指定K8S集群的认证配置文件路径
-- **-namespace**: 指定要监控的目标命名空间
-- **-enable-monitor**: 启用/禁用K8S监控代理
-- **-enable-alert**: 启用/禁用告警处理代理
-- **-enable-remediation**: 启用/禁用自动修复代理（高风险操作，建议谨慎启用）
-- **-enable-decision**: 启用/禁用决策制定代理（需要AI模型支持）
-- **-metrics-port**: 指定暴露Prometheus指标的端口
-- **-config**: 指定配置文件路径
-- **-log-level**: 设置日志输出级别
-- **-model**: 指定用于AI代理的大语言模型
-- **-max-retry**: 设置失败操作的最大重试次数
-- **-dry-run**: 以演练模式运行，不执行实际的变更操作
+basic:
+  interval_seconds: 30
+  max_retries: 3
+  dry_run: true  # 演练模式，不执行实际操作
 
-### 示例用法
+monitoring:
+  enable_monitor: true
+  enable_alert: true
+  enable_remediation: false  # 测试环境禁用自动修复
+  enable_decision: false
+  aggregation_interval_minutes: 5  # 测试环境缩短聚合间隔
+```
+
+### 运行程序
 
 ```bash
-# 基础监控模式（仅启用监控和告警）
-./otisbrain -namespace production -enable-remediation=false -enable-decision=false
+# 使用默认配置文件运行
+./otisbrain
 
-# 全功能模式（启用所有代理）
-./otisbrain -namespace production -enable-monitor -enable-alert -enable-remediation -enable-decision -model gpt-4o
-
-# 演练模式（测试配置，不执行实际操作）
-./otisbrain -namespace staging -dry-run -log-level debug
-
-# 自定义配置
-./otisbrain -kubeconfig /custom/path/kubeconfig -namespace myapp -config /etc/otisbrain/config.yaml
+# 指定自定义配置文件
+./otisbrain -config /path/to/custom/config.yaml
 ```
 
 ### 代理能力说明
 
-1. **监控代理 (-enable-monitor)**:
+1. **监控代理 (monitoring.enable_monitor)**:
    - 实时监控资源状态
    - 收集性能指标
    - 检测异常状态
@@ -363,21 +402,31 @@ Options:
    - 基础功能：基于预设规则检测常见问题（如Pod崩溃、资源不足等）
    - 增强功能：当大模型可用时，进行智能异常检测和根因分析
 
-2. **告警代理 (-enable-alert)**:
+2. **告警代理 (monitoring.enable_alert)**:
    - 处理监控代理产生的告警
    - 分类和优先级排序
    - 发送通知
    - 此代理依赖监控代理，默认启用
 
-3. **修复代理 (-enable-remediation)**:
+3. **修复代理 (monitoring.enable_remediation)**:
    - 自动执行预定义的修复操作
    - 如重启故障Pod、调整资源配额等
    - 高风险操作，需要谨慎启用
    - 建议先在非生产环境测试
 
-4. **决策代理 (-enable-decision)**:
+4. **决策代理 (monitoring.enable_decision)**:
    - 使用AI模型进行复杂问题分析（当AI模型可用时）
    - 当AI模型不可用时，使用预定义规则进行基本决策
    - 制定高级决策策略
    - 需要配置AI模型访问（可选）
    - 适合处理复杂或未知问题
+
+### 关键事件聚合机制
+
+系统实现了关键事件的定时聚合机制：
+
+- **聚合间隔**: 通过 `monitoring.aggregation_interval_minutes` 配置，默认为10分钟
+- **聚合内容**: 对 `logs/basic` 路径下的日志进行整理、去重
+- **输出位置**: 聚合后的异常数据汇总输出到 `logs/critical_record` 路径
+- **目的**: 为AI增强能力的agent提供简洁的异常数据，便于读取和分析
+- **格式**: 输出简短的异常数据汇总，包含关键事件、Pod状态等信息
