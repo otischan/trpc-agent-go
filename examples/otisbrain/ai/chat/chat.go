@@ -34,6 +34,7 @@ type AIChat struct {
 	variant        string
 	config         *config.Config
 	logger         *basic.BasicLogger
+	skillRepo      skill.Repository
 }
 
 // NewAIChat creates a new AI chat instance
@@ -71,12 +72,24 @@ func (c *AIChat) setup(_ context.Context) error {
 	sessionService := sessioninmemory.NewSessionService()
 
 	// Skills repository - dynamically load skills from resources directory
-	skillsRoot := "../resources/skills"
+	skillsRoot := "./resources/skills"  // Use relative path from executable location
 	repo, err := skill.NewFSRepository(skillsRoot)
 	if err != nil {
 		c.logger.Printf("Warning: Could not initialize skills repository: %v", err)
+		c.logger.Printf("Attempting to initialize skills executor as fallback...")
+
+		// Initialize skills executor as fallback mechanism
+		skillExecutor := tools.NewSkillExecutor("./resources/skills")
+		availableSkills, err := skillExecutor.GetAvailableSkills()
+		if err != nil {
+			c.logger.Printf("Fallback skills initialization also failed: %v", err)
+		} else {
+			c.logger.Printf("Fallback skills initialized successfully. Available skills: %d", len(availableSkills))
+		}
+		c.skillRepo = nil  // Explicitly set to nil when repo initialization fails
 	} else {
 		c.logger.Printf("Skills repository initialized from: %s", skillsRoot)
+		c.skillRepo = repo  // Store the repository for later use
 	}
 
 	genConfig := model.GenerationConfig{
@@ -149,6 +162,20 @@ func (c *AIChat) startChat(ctx context.Context) error {
 
 // processMessage sends a message to the AI and processes the response
 func (c *AIChat) processMessage(ctx context.Context, userMessage string) error {
+	// Handle special management commands
+	lowerMsg := strings.ToLower(strings.TrimSpace(userMessage))
+
+	// Handle list skills command
+	if lowerMsg == "list skills" || lowerMsg == "/list skills" || lowerMsg == "/skills" {
+		return c.listSkills(ctx)
+	}
+
+	// Handle help command
+	if lowerMsg == "help" || lowerMsg == "/help" {
+		return c.showHelp()
+	}
+
+	// Handle other management commands as needed
 	message := model.NewUserMessage(userMessage)
 	requestID := uuid.New().String()
 	eventChan, err := c.runner.Run(ctx, c.userID, c.sessionID, message, agent.WithRequestID(requestID))
@@ -282,6 +309,47 @@ func (c *AIChat) displayContent(
 	}
 	fmt.Print(content)
 	*fullContent += content
+}
+
+// listSkills lists all available skills
+func (c *AIChat) listSkills(ctx context.Context) error {
+	fmt.Println("📋 Available Skills:")
+
+	// Since the repository doesn't have a List method, use our custom skill executor
+	fmt.Println("  🔄 Using fallback method to load skills...")
+	skillExecutor := tools.NewSkillExecutor("./resources/skills")
+	availableSkills, err := skillExecutor.GetAvailableSkills()
+	if err != nil {
+		fmt.Printf("  ❌ Could not load skills: %v\n", err)
+	} else {
+		if len(availableSkills) == 0 {
+			fmt.Println("  No skills available")
+		} else {
+			for _, skill := range availableSkills {
+				fmt.Printf("  • %s: %s\n", skill.Name, skill.Description)
+			}
+		}
+	}
+
+	fmt.Println("")
+	return nil
+}
+
+// showHelp shows help information
+func (c *AIChat) showHelp() error {
+	fmt.Println("📖 OtisBrain AI Assistant Help:")
+	fmt.Println("  • Ask questions about your Kubernetes cluster")
+	fmt.Println("  • Request information about cluster resources")
+	fmt.Println("  • Ask for recent critical events")
+	fmt.Println("  • Type 'list skills' to see available tools")
+	fmt.Println("  • Type '/exit' to quit")
+	fmt.Println("")
+	return nil
+}
+
+// getSkillsRepository returns the stored skills repository
+func (c *AIChat) getSkillsRepository() skill.Repository {
+	return c.skillRepo
 }
 
 // getRecentCriticalEvents retrieves recent critical events based on user request
