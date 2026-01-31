@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
+	"gopkg.in/natefinch/lumberjack.v2"
 )
 
 // BasicLogger wraps logrus logger with custom output to basic path
@@ -38,15 +39,15 @@ func NewBasicLoggerWithNamespace(logLevel, namespace string) (*BasicLogger, erro
 	}
 	logger.SetLevel(level)
 
-	// Create file for basic logs
-	logFileName := filepath.Join(basicLogPath, fmt.Sprintf("basic_%s.log", time.Now().Format("20060102_150405")))
-	logFile, err := os.OpenFile(logFileName, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
-	if err != nil {
-		return nil, fmt.Errorf("failed to open basic log file: %w", err)
-	}
-
-	// Set output to file only (for background tasks)
-	logger.SetOutput(logFile)
+	// Set output to file with rotation (for background tasks)
+	logFileName := filepath.Join(basicLogPath, "basic.log")
+	logger.SetOutput(&lumberjack.Logger{
+		Filename:   logFileName,
+		MaxSize:    10, // megabytes
+		MaxBackups: 3,
+		MaxAge:     28, // days
+		Compress:   true,
+	})
 
 	// Set formatter
 	logger.SetFormatter(&logrus.TextFormatter{
@@ -80,15 +81,15 @@ func NewBasicLoggerWithCustomPath(logLevel string, customPath string) (*BasicLog
 		return nil, fmt.Errorf("failed to create logs directory: %w", err)
 	}
 
-	// Create file for basic logs
-	logFileName := filepath.Join(customPath, fmt.Sprintf("basic_%s.log", time.Now().Format("20060102_150405")))
-	logFile, err := os.OpenFile(logFileName, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
-	if err != nil {
-		return nil, fmt.Errorf("failed to open basic log file: %w", err)
-	}
-
-	// Set output to file only (for background tasks)
-	logger.SetOutput(logFile)
+	// Set output to file with rotation (for background tasks)
+	logFileName := filepath.Join(customPath, "basic.log")
+	logger.SetOutput(&lumberjack.Logger{
+		Filename:   logFileName,
+		MaxSize:    10, // megabytes
+		MaxBackups: 3,
+		MaxAge:     28, // days
+		Compress:   true,
+	})
 
 	// Set formatter
 	logger.SetFormatter(&logrus.TextFormatter{
@@ -146,15 +147,15 @@ func NewFileOnlyLogger(logLevel string, logPath string, fileName string) (*logru
 	}
 	logger.SetLevel(level)
 
-	// Create file for logs
+	// Set output to file with rotation
 	logFilePath := filepath.Join(logPath, fileName)
-	logFile, err := os.OpenFile(logFilePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
-	if err != nil {
-		return nil, fmt.Errorf("failed to open log file: %w", err)
-	}
-
-	// Set output to file only
-	logger.SetOutput(logFile)
+	logger.SetOutput(&lumberjack.Logger{
+		Filename:   logFilePath,
+		MaxSize:    10, // megabytes
+		MaxBackups: 3,
+		MaxAge:     28, // days
+		Compress:   true,
+	})
 
 	// Set formatter
 	logger.SetFormatter(&logrus.TextFormatter{
@@ -198,7 +199,7 @@ func (bl *BasicLogger) WriteCriticalEvent(objType, objName, eventType, message s
 // WriteCriticalEventForAggregation writes critical events in a format suitable for aggregation
 func (bl *BasicLogger) WriteCriticalEventForAggregation(objType, objName, eventType, message string) {
 	// Extract namespace from basicLogPath (logs/basic/{namespace}/)
-	namespace := extractNamespaceFromBasicLogPath(bl.basicLogPath)
+	namespace := ExtractNamespaceFromPath(bl.basicLogPath)
 
 	// Format the log entry for easy parsing during aggregation
 	logEntry := fmt.Sprintf("CRITICAL|%s|%s|%s|%s|%s|%s\n",
@@ -212,24 +213,18 @@ func (bl *BasicLogger) WriteCriticalEventForAggregation(objType, objName, eventT
 
 	// Write to a dedicated aggregation-ready file
 	aggregationLogPath := filepath.Join(bl.basicLogPath, "for_aggregation.log")
-	file, err := os.OpenFile(aggregationLogPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
-	if err == nil {
-		defer file.Close()
-		file.WriteString(logEntry)
+	file, err := os.OpenFile(aggregationLogPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	if err != nil {
+		bl.Logger.Errorf("Failed to open aggregation log file %s: %v", aggregationLogPath, err)
+		return
+	}
+	defer file.Close()
+
+	if _, err := file.WriteString(logEntry); err != nil {
+		bl.Logger.Errorf("Failed to write to aggregation log file %s: %v", aggregationLogPath, err)
 	}
 }
 
-// extractNamespaceFromBasicLogPath extracts the namespace from the basic log path
-func extractNamespaceFromBasicLogPath(basicLogPath string) string {
-	// Path format: logs/basic/{namespace}
-	parts := strings.Split(basicLogPath, string(os.PathSeparator))
-	for i, part := range parts {
-		if part == "basic" && i+1 < len(parts) {
-			return parts[i+1] // The next part should be the namespace
-		}
-	}
-	return "default" // fallback to default namespace
-}
 
 // GetBasicLogPath returns the path to basic logs
 func (bl *BasicLogger) GetBasicLogPath() string {

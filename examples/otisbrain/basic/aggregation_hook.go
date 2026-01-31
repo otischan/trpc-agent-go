@@ -54,10 +54,16 @@ func (hook *AggregationHook) writeCriticalEventForAggregation(namespace, objType
 
 	// Write to a dedicated aggregation-ready file
 	aggregationLogPath := filepath.Join(hook.basicLogPath, "for_aggregation.log")
-	file, err := os.OpenFile(aggregationLogPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
-	if err == nil {
-		defer file.Close()
-		file.WriteString(logEntry)
+	file, err := os.OpenFile(aggregationLogPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	if err != nil {
+		// Log the error but don't fail the entire operation
+		fmt.Fprintf(os.Stderr, "Failed to open aggregation log file %s: %v\n", aggregationLogPath, err)
+		return
+	}
+	defer file.Close()
+
+	if _, err := file.WriteString(logEntry); err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to write to aggregation log file %s: %v\n", aggregationLogPath, err)
 	}
 }
 

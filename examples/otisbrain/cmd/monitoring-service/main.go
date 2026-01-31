@@ -14,7 +14,6 @@ import (
 	"github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
-	aiagent "trpc.group/trpc-go/trpc-agent-go/examples/otisbrain/ai/agent"
 	basicagent "trpc.group/trpc-go/trpc-agent-go/examples/otisbrain/basic/agent"
 	"trpc.group/trpc-go/trpc-agent-go/examples/otisbrain/basic"
 	"trpc.group/trpc-go/trpc-agent-go/examples/otisbrain/config"
@@ -147,17 +146,14 @@ func main() {
 	defer logAggregator.Stop()
 
 	// Initialize and run basic monitoring agent if enabled (in background with file-only logger)
-	if cfg.Monitoring.EnableMonitor {
+	if cfg.Monitoring.EnableMonitorResources {
 		// Start in a separate goroutine to avoid logging interfering with chat
 		go func() {
-			// Determine which namespaces to monitor
-			var namespaces []string
-			if len(cfg.Monitoring.Namespaces) > 0 {
-				// Use the new Namespaces field if available
-				namespaces = cfg.Monitoring.Namespaces
-			} else {
-				// Fallback to the old Namespace field for backward compatibility
-				namespaces = []string{cfg.Monitoring.Namespace}
+			// Use the Namespaces field
+			namespaces := cfg.Monitoring.Namespaces
+			if len(namespaces) == 0 {
+				// Fallback to default namespace if none specified
+				namespaces = []string{"default"}
 			}
 
 			if len(namespaces) == 1 && namespaces[0] == "all" {
@@ -186,16 +182,14 @@ func main() {
 	}
 
 	// Initialize and run basic alert agent if enabled (in background with file-only logger)
-	if cfg.Monitoring.EnableAlert {
+	if cfg.Monitoring.EnableMonitorEvents {
 		// Start in a separate goroutine to avoid logging interfering with chat
 		go func() {
-			// Determine which namespace to use for alerts
-			var alertNamespace string
-			if len(cfg.Monitoring.Namespaces) > 0 {
-				// Use the first namespace from the list for alerts
-				alertNamespace = cfg.Monitoring.Namespaces[0]
-			} else {
-				alertNamespace = cfg.Monitoring.Namespace
+			// Use the first namespace from the list for alerts
+			alertNamespace := cfg.Monitoring.Namespaces[0]
+			if len(cfg.Monitoring.Namespaces) == 0 {
+				// Fallback to default namespace if none specified
+				alertNamespace = "default"
 			}
 
 			alertAgent := basicagent.NewBasicAlertAgent(clientset, alertNamespace, cfg, fileLogger.Logger)
@@ -205,79 +199,6 @@ func main() {
 		}()
 	}
 
-	// Initialize and run basic remediation agent if enabled (in background with file-only logger)
-	if cfg.Monitoring.EnableRemediation {
-		// Determine which namespace to use for remediation
-		var remediationNamespace string
-		if len(cfg.Monitoring.Namespaces) > 0 {
-			// Use the first namespace from the list for remediation
-			remediationNamespace = cfg.Monitoring.Namespaces[0]
-		} else {
-			remediationNamespace = cfg.Monitoring.Namespace
-		}
-
-		// Run remediation checks periodically in background
-		go func() {
-			remediationAgent := basicagent.NewBasicRemediationAgent(clientset, remediationNamespace, cfg)
-
-			ticker := time.NewTicker(30 * time.Second) // Check every 30 seconds
-			defer ticker.Stop()
-
-			for {
-				select {
-				case <-ticker.C:
-					if err := remediationAgent.RunRemediationCycle(); err != nil {
-						consoleLogger.Printf("Error running remediation cycle: %v", err)
-					}
-				case <-ctx.Done():
-					consoleLogger.Info("Stopping remediation agent...")
-					return
-				}
-			}
-		}()
-	}
-
-	// Initialize and run AI-enhanced monitoring agent if decision-making is enabled (in background with file-only logger)
-	if cfg.Monitoring.EnableDecision && cfg.LLM.Enabled {
-		// Start in a separate goroutine to avoid logging interfering with chat
-		go func() {
-			// Update the config to use the first namespace from the list if multiple are specified
-			modifiedCfg := *cfg
-			if len(cfg.Monitoring.Namespaces) > 0 {
-				modifiedCfg.Monitoring.Namespace = cfg.Monitoring.Namespaces[0]
-			}
-
-			aiMonitorAgent, err := aiagent.NewAIEnhancedMonitorAgent(&modifiedCfg)
-			if err != nil {
-				consoleLogger.Printf("Error creating AI-enhanced monitoring agent: %v", err)
-			} else {
-				if err := aiMonitorAgent.Start(ctx); err != nil {
-					consoleLogger.Printf("Error starting AI-enhanced monitoring agent: %v", err)
-				}
-			}
-		}()
-	}
-
-	// Initialize and run AI-enhanced alert agent if decision-making is enabled (in background with file-only logger)
-	if cfg.Monitoring.EnableDecision && cfg.LLM.Enabled {
-		// Start in a separate goroutine to avoid logging interfering with chat
-		go func() {
-			// Update the config to use the first namespace from the list if multiple are specified
-			modifiedCfg := *cfg
-			if len(cfg.Monitoring.Namespaces) > 0 {
-				modifiedCfg.Monitoring.Namespace = cfg.Monitoring.Namespaces[0]
-			}
-
-			aiAlertAgent, err := aiagent.NewAIEnhancedAlertAgent(&modifiedCfg)
-			if err != nil {
-				consoleLogger.Printf("Error creating AI-enhanced alert agent: %v", err)
-			} else {
-				if err := aiAlertAgent.Start(ctx); err != nil {
-					consoleLogger.Printf("Error starting AI-enhanced alert agent: %v", err)
-				}
-			}
-		}()
-	}
 
 	consoleLogger.Info("Monitoring service started successfully")
 

@@ -4,9 +4,9 @@
 
 OtisBrain 是一个基于 tRPC-Agent-Go 框架构建的 Kubernetes 集群智能监控和运维系统。该系统采用微服务架构，拆分为五个独立的服务：
 
-1. **监控服务 (monitoring-service)**：持续运行的监控、告警和修复任务，在后台默默守护集群健康
+1. **监控服务 (monitoring-service)**：持续运行的监控和告警任务，在后台默默守护集群健康
 2. **聊天服务 (chat-service)**：提供实时聊天界面，让用户可以随时与系统交互，获取集群信息和执行运维操作
-3. **规则引擎服务 (rule-engine-service)**：基于预设规则分析异常并输出策略
+3. **规则引擎服务 (rule-engine-service)**：基于预设规则分析异常并执行自动修复策略
 4. **AI决策服务 (ai-decision-service)**：与LLM交互，基于监控数据生成决策
 5. **MCP操作服务 (mcp-service)**：统化K8S操作接口
 
@@ -23,25 +23,15 @@ otisbrain/
 ├── go.sum                              # Go依赖校验
 ├── cmd/                                # 命令行工具目录
 │   ├── monitoring-service/             # 监控服务
-│   │   ├── main.go                     # 监控服务主入口
-│   │   └── config/                     # 监控服务配置
-│   │       └── config.yaml             # 监控服务配置文件
+│   │   └── main.go                     # 监控服务主入口
 │   ├── chat-service/                   # 聊天服务
-│   │   ├── main.go                     # 聊天服务主入口
-│   │   └── config/                     # 聊天服务配置
-│   │       └── config.yaml             # 聊天服务配置文件
+│   │   └── main.go                     # 聊天服务主入口
 │   ├── rule-engine-service/            # 规则引擎服务
-│   │   ├── main.go                     # 规则引擎服务主入口
-│   │   └── config/                     # 规则引擎服务配置
-│   │       └── config.yaml             # 规则引擎服务配置文件
+│   │   └── main.go                     # 规则引擎服务主入口
 │   ├── ai-decision-service/            # AI决策服务
-│   │   ├── main.go                     # AI决策服务主入口
-│   │   └── config/                     # AI决策服务配置
-│   │       └── config.yaml             # AI决策服务配置文件
+│   │   └── main.go                     # AI决策服务主入口
 │   └── mcp-service/                    # MCP操作服务
-│       ├── main.go                     # MCP操作服务主入口
-│       └── config/                     # MCP操作服务配置
-│           └── config.yaml             # MCP操作服务配置文件
+│       └── main.go                     # MCP操作服务主入口
 ├── basic/                              # 基础监控与运维层
 │   ├── monitor/                        # 基础监控模块
 │   │   ├── collector.go                # 指标收集器
@@ -121,15 +111,15 @@ otisbrain/
 
 此服务专注于后台持续运行的K8S监控和运维功能：
 
-- **基础监控代理**：监控Pod状态、Deployment副本数、Service可用性等
+- **K8S资源监控代理**：监控Pod状态、Deployment副本数、Service可用性等资源状态
+- **K8S事件监控代理**：监听K8S API的事件流，捕获异常事件
 - **多命名空间监控**：支持同时监控多个命名空间（通过配置文件中的namespaces字段指定）
-- **事件监听**：监听K8S API的事件流，捕获异常事件
 - **告警处理**：根据预定义规则生成告警
-- **自动修复**：执行预定义的修复操作（如重启Pod、调整副本数）
 - **AI增强监控**：使用AI进行异常模式识别和预测性分析
 - **AI增强告警**：AI辅助的告警分类和优先级排序
 - **关键信息聚合**：按配置指定间隔周期汇总关键异常信息
 - **数据持久化**：将监控数据和事件存储到共享存储中
+- **规则引擎与修复**：通过规则引擎服务处理自动修复操作
 
 **特点**：
 - 不与 LLM 交互，专注于数据收集和处理
@@ -492,7 +482,7 @@ logs/
 
 ### 监控服务配置
 
-监控服务的配置文件位于 `cmd/monitoring-service/config/config.yaml`，包含以下主要配置项：
+监控服务的配置文件位于 `config/config.yaml`，包含以下主要配置项：
 
 ```yaml
 log_level: info                    # 日志级别 (debug, info, warn, error)
@@ -516,11 +506,8 @@ basic:                             # 基础监控配置
   dry_run: false                   # 是否演练模式（不执行实际操作）
 
 monitoring:                        # 监控代理配置
-  enable_monitor: true             # 是否启用监控代理
-  enable_alert: true               # 是否启用告警代理
-  enable_remediation: false        # 是否启用修复代理
-  enable_decision: false           # 是否启用决策代理
-  namespace: default               # 监控的命名空间 (已弃用，请使用 namespaces)
+  enable_monitor_resources: true   # 是否启用K8S资源监控代理
+  enable_monitor_events: true      # 是否启用K8S事件监控代理
   namespaces: ["default", "kube-system", "monitoring"] # 监控的命名空间列表 (支持多个命名空间)
   kubeconfig: ""                   # K8S集群认证配置文件路径
   metrics_port: 8080               # 暴露指标的端口
@@ -528,15 +515,14 @@ monitoring:                        # 监控代理配置
 ```
 
 **多命名空间监控说明**：
-- 新增 `namespaces` 字段，支持同时监控多个命名空间
+- `namespaces` 字段，支持同时监控多个命名空间
 - 每个命名空间的日志将存储在独立的目录中 (`logs/basic/{namespace}/`)
-- 为了向后兼容，如果未设置 `namespaces` 字段，系统将继续使用 `namespace` 字段
 - 设置为 `["all"]` 可以监控集群中的所有命名空间
 - 日志聚合器会从所有命名空间的日志目录中收集信息并生成汇总报告
 
 ### 聊天服务配置
 
-聊天服务的配置文件位于 `cmd/chat-service/config/config.yaml`，包含以下主要配置项：
+聊天服务的配置文件位于 `config/config.yaml`，包含以下主要配置项：
 
 ```yaml
 log_level: info                    # 日志级别 (debug, info, warn, error)
@@ -569,7 +555,7 @@ chat:                              # 聊天界面配置
 
 ### 规则引擎服务配置
 
-规则引擎服务的配置文件位于 `cmd/rule-engine-service/config/config.yaml`，包含以下主要配置项：
+规则引擎服务的配置文件位于 `config/config.yaml`，包含以下主要配置项：
 
 ```yaml
 log_level: info                    # 日志级别 (debug, info, warn, error)
@@ -595,7 +581,7 @@ rule_engine:                       # 规则引擎配置
 
 ### AI决策服务配置
 
-AI决策服务的配置文件位于 `cmd/ai-decision-service/config/config.yaml`，包含以下主要配置项：
+AI决策服务的配置文件位于 `config/config.yaml`，包含以下主要配置项：
 
 ```yaml
 log_level: info                    # 日志级别 (debug, info, warn, error)
@@ -617,7 +603,7 @@ ai_decision:                       # AI决策服务配置
 
 ### MCP操作服务配置
 
-MCP操作服务的配置文件位于 `cmd/mcp-service/config/config.yaml`，包含以下主要配置项：
+MCP操作服务的配置文件位于 `config/config.yaml`，包含以下主要配置项：
 
 ```yaml
 log_level: info                    # 日志级别 (debug, info, warn, error)
@@ -676,7 +662,7 @@ make build-all
 
 ### 代理能力说明
 
-1. **监控代理 (monitoring.enable_monitor)**:
+1. **K8S资源监控代理 (monitoring.enable_monitor_resources)**:
    - 实时监控资源状态
    - 收集性能指标
    - 检测异常状态
@@ -685,32 +671,26 @@ make build-all
    - 基础功能：基于预设规则检测常见问题（如Pod崩溃、资源不足等）
    - 增强功能：当大模型可用时，进行智能异常检测和根因分析
 
-2. **告警代理 (monitoring.enable_alert)**:
-   - 处理监控代理产生的告警
+2. **K8S事件监控代理 (monitoring.enable_monitor_events)**:
+   - 处理K8S事件流，监听集群事件
    - 分类和优先级排序
    - 发送通知
    - 此代理依赖监控代理，默认启用
 
-3. **修复代理 (monitoring.enable_remediation)**:
-   - 自动执行预定义的修复操作
+3. **修复代理 (rule_engine.enable_rule_engine)**:
+   - 基于预设规则自动执行修复操作
+   - 通过规则引擎服务实现
    - 如重启故障Pod、调整资源配额等
    - 高风险操作，需要谨慎启用
    - 建议先在非生产环境测试
 
-4. **决策代理 (monitoring.enable_decision)**:
-   - 使用AI模型进行复杂问题分析（当AI模型可用时）
-   - 当AI模型不可用时，使用预定义规则进行基本决策
-   - 制定高级决策策略
-   - 需要配置AI模型访问（可选）
-   - 适合处理复杂或未知问题
-
-5. **规则引擎代理 (rule_engine.enable_rule_engine)**:
+4. **规则引擎代理 (rule_engine.enable_rule_engine)**:
    - 基于预设规则分析异常
    - 生成修复或调整策略
    - 通过MCP服务执行策略
    - 支持动态规则管理
 
-6. **AI决策代理 (ai_decision.enable_ai_decision)**:
+5. **AI决策代理 (ai_decision.enable_ai_decision)**:
    - 与LLM交互，基于监控数据生成决策
    - 构建适合LLM的prompt格式
    - 通过MCP服务执行AI生成的策略

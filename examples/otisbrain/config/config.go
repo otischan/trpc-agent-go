@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"os"
 
 	"gopkg.in/yaml.v2"
@@ -87,15 +88,72 @@ type Basic struct {
 
 // Monitoring holds monitoring-specific configurations
 type Monitoring struct {
-	EnableMonitor       bool     `yaml:"enable_monitor"`
-	EnableAlert         bool     `yaml:"enable_alert"`
-	EnableRemediation   bool     `yaml:"enable_remediation"`
-	EnableDecision      bool     `yaml:"enable_decision"`
-	Namespace           string   `yaml:"namespace"`           // Single namespace (deprecated, kept for backward compatibility)
+	EnableMonitorResources bool `yaml:"enable_monitor_resources"`
+	EnableMonitorEvents    bool `yaml:"enable_monitor_events"`
 	Namespaces          []string `yaml:"namespaces"`          // Multiple namespaces for monitoring
 	Kubeconfig          string   `yaml:"kubeconfig"`
 	MetricsPort         int      `yaml:"metrics_port"`
 	AggregationInterval int      `yaml:"aggregation_interval_minutes"` // Interval for aggregating logs in minutes
+}
+
+// Validate validates the configuration parameters
+func (c *Config) Validate() error {
+	// Validate log level
+	if c.LogLevel != "debug" && c.LogLevel != "info" && c.LogLevel != "warn" && c.LogLevel != "error" {
+		return fmt.Errorf("invalid log level: %s, must be one of debug, info, warn, error", c.LogLevel)
+	}
+
+	// Validate metrics port
+	if c.MetricsPort <= 0 || c.MetricsPort > 65535 {
+		return fmt.Errorf("invalid metrics port: %d, must be between 1 and 65535", c.MetricsPort)
+	}
+
+	// Validate basic configuration
+	if c.Basic.IntervalSeconds <= 0 {
+		return fmt.Errorf("basic interval seconds must be positive, got: %d", c.Basic.IntervalSeconds)
+	}
+
+	if c.Basic.MaxRetries < 0 {
+		return fmt.Errorf("basic max retries must be non-negative, got: %d", c.Basic.MaxRetries)
+	}
+
+	// Validate monitoring configuration
+	if c.Monitoring.EnableMonitorResources || c.Monitoring.EnableMonitorEvents { // Only validate if monitoring or alerting is enabled
+		if c.Monitoring.AggregationInterval <= 0 {
+			return fmt.Errorf("monitoring aggregation interval must be positive, got: %d", c.Monitoring.AggregationInterval)
+		}
+	}
+
+	// Validate rule engine configuration
+	if c.RuleEngine.EnableRuleEngine { // Only validate if rule engine is enabled
+		if c.RuleEngine.AggregationInterval <= 0 {
+			return fmt.Errorf("rule engine aggregation interval must be positive, got: %d", c.RuleEngine.AggregationInterval)
+		}
+
+		if c.RuleEngine.RuleCheckInterval <= 0 {
+			return fmt.Errorf("rule check interval must be positive, got: %d", c.RuleEngine.RuleCheckInterval)
+		}
+	}
+
+	// Validate AI decision configuration
+	if c.AIDecision.EnableAIDecision { // Only validate if AI decision is enabled
+		if c.AIDecision.DecisionInterval <= 0 {
+			return fmt.Errorf("AI decision interval must be positive, got: %d", c.AIDecision.DecisionInterval)
+		}
+
+		if c.AIDecision.MaxConcurrentRequests <= 0 {
+			return fmt.Errorf("AI max concurrent requests must be positive, got: %d", c.AIDecision.MaxConcurrentRequests)
+		}
+	}
+
+	// Validate K8s operation configuration
+	if c.K8sOperation.EnableK8sOperation { // Only validate if K8s operation is enabled
+		if c.K8sOperation.MaxConcurrentOperations <= 0 {
+			return fmt.Errorf("K8s max concurrent operations must be positive, got: %d", c.K8sOperation.MaxConcurrentOperations)
+		}
+	}
+
+	return nil
 }
 
 // LoadConfig loads configuration from a YAML file
@@ -114,12 +172,17 @@ func LoadConfig(configPath string) (*Config, error) {
 		return nil, err
 	}
 
+	// Validate the loaded configuration
+	if err := config.Validate(); err != nil {
+		return nil, fmt.Errorf("configuration validation failed: %w", err)
+	}
+
 	return &config, nil
 }
 
 // getDefaultConfig returns a default configuration
 func getDefaultConfig() *Config {
-	return &Config{
+	config := &Config{
 		LogLevel:    "info",
 		MetricsPort: 8080,
 		Namespace:   "default",
@@ -152,11 +215,8 @@ func getDefaultConfig() *Config {
 			DryRun:          false,
 		},
 		Monitoring: Monitoring{
-			EnableMonitor:       true,
-			EnableAlert:         true,
-			EnableRemediation:   false,
-			EnableDecision:      false,
-			Namespace:           "default",
+			EnableMonitorResources: true,
+			EnableMonitorEvents:    true,
 			Namespaces:          []string{"default"}, // Default to single namespace for backward compatibility
 			Kubeconfig:          "",
 			MetricsPort:         8080,
@@ -184,4 +244,12 @@ func getDefaultConfig() *Config {
 			MaxConcurrentOperations: 10,
 		},
 	}
+
+	// Validate the default config to catch any issues early
+	if err := config.Validate(); err != nil {
+		// This should not happen with hardcoded defaults, but log if it does
+		fmt.Printf("Warning: Default configuration validation failed: %v\n", err)
+	}
+
+	return config
 }

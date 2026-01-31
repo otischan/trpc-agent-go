@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -14,29 +15,33 @@ import (
 
 // LogAggregator handles aggregation of logs every 10 minutes
 type LogAggregator struct {
-	logger       *logrus.Logger
-	basicLogPath string
-	interval     time.Duration
-	stopCh       chan struct{}
+	logger          *logrus.Logger
+	basicLogPath    string
+	interval        time.Duration
+	stopCh          chan struct{}
+	mutex           sync.Mutex
+	lastProcessedAt time.Time
 }
 
 // NewLogAggregator creates a new log aggregator with default 10 minute interval
 func NewLogAggregator(logger *logrus.Logger, basicLogPath string) *LogAggregator {
 	return &LogAggregator{
-		logger:       logger,
-		basicLogPath: basicLogPath,
-		interval:     10 * time.Minute, // 10 minutes as specified in requirements
-		stopCh:       make(chan struct{}),
+		logger:          logger,
+		basicLogPath:    basicLogPath,
+		interval:        10 * time.Minute, // 10 minutes as specified in requirements
+		stopCh:          make(chan struct{}),
+		lastProcessedAt: time.Now().Add(-10 * time.Minute), // Initialize to 10 minutes ago
 	}
 }
 
 // NewLogAggregatorWithInterval creates a new log aggregator with custom interval
 func NewLogAggregatorWithInterval(logger *logrus.Logger, basicLogPath string, interval time.Duration) *LogAggregator {
 	return &LogAggregator{
-		logger:       logger,
-		basicLogPath: basicLogPath,
-		interval:     interval,
-		stopCh:       make(chan struct{}),
+		logger:          logger,
+		basicLogPath:    basicLogPath,
+		interval:        interval,
+		stopCh:          make(chan struct{}),
+		lastProcessedAt: time.Now().Add(-interval), // Initialize to interval ago
 	}
 }
 
@@ -47,7 +52,18 @@ func (la *LogAggregator) Start() {
 
 // Stop stops the log aggregation process
 func (la *LogAggregator) Stop() {
-	close(la.stopCh)
+	la.mutex.Lock()
+	defer la.mutex.Unlock()
+
+	// Check if already closed to prevent panic
+	select {
+	case <-la.stopCh:
+		// Channel already closed
+		return
+	default:
+		// Channel not closed yet
+		close(la.stopCh)
+	}
 }
 
 // run runs the aggregation loop
@@ -80,9 +96,12 @@ func (la *LogAggregator) aggregateLogs() {
 		return
 	}
 
-	// Get logs from the last 10 minutes
-	startTime := time.Now().Add(-la.interval)
+	// Use the last processed time as the start time to avoid gaps/overlaps
+	la.mutex.Lock()
+	startTime := la.lastProcessedAt
 	endTime := time.Now()
+	la.lastProcessedAt = endTime
+	la.mutex.Unlock()
 
 	// Read aggregation-ready log files from all namespace directories
 	aggregationFiles, err := la.getLogFilesForAggregation(startTime, endTime)
@@ -196,6 +215,7 @@ func (la *LogAggregator) parseCriticalEvents(files []string, startTime, endTime 
 func (la *LogAggregator) parseFileForCriticalEvents(filePath string, startTime, endTime time.Time) ([]CriticalEvent, error) {
 	file, err := os.Open(filePath)
 	if err != nil {
+		la.logger.Errorf("Failed to open file %s: %v", filePath, err)
 		return nil, err
 	}
 	defer file.Close()
@@ -204,9 +224,11 @@ func (la *LogAggregator) parseFileForCriticalEvents(filePath string, startTime, 
 	scanner := bufio.NewScanner(file)
 
 	// Extract namespace from file path
-	namespace := extractNamespaceFromPath(filePath)
+	namespace := ExtractNamespaceFromPath(filePath)
 
+	lineNum := 0
 	for scanner.Scan() {
+		lineNum++
 		line := scanner.Text()
 
 		// Expected format: CRITICAL|timestamp|namespace|type|name|event|message
@@ -216,6 +238,7 @@ func (la *LogAggregator) parseFileForCriticalEvents(filePath string, startTime, 
 				timestampStr := parts[1]
 				timestamp, err := time.Parse(time.RFC3339, timestampStr)
 				if err != nil {
+					la.logger.Warnf("Failed to parse timestamp '%s' in file %s at line %d: %v", timestampStr, filePath, lineNum, err)
 					continue
 				}
 
@@ -246,27 +269,23 @@ func (la *LogAggregator) parseFileForCriticalEvents(filePath string, startTime, 
 			// Look for logrus structured logs with namespace field
 			if strings.Contains(line, "CRITICAL_EVENT") || strings.Contains(line, "namespace") {
 				event, err := parseLogrusLine(line, namespace)
-				if err == nil && !event.Timestamp.Before(startTime) && !event.Timestamp.After(endTime) {
+				if err != nil {
+					la.logger.Warnf("Failed to parse logrus line in file %s at line %d: %v", filePath, lineNum, err)
+				} else if !event.Timestamp.Before(startTime) && !event.Timestamp.After(endTime) {
 					events = append(events, event)
 				}
 			}
 		}
 	}
 
-	return events, scanner.Err()
+	if err := scanner.Err(); err != nil {
+		la.logger.Errorf("Error reading file %s: %v", filePath, err)
+		return events, err
+	}
+
+	return events, nil
 }
 
-// extractNamespaceFromPath extracts the namespace from the file path
-func extractNamespaceFromPath(filePath string) string {
-	// Path format: logs/basic/{namespace}/basic.log
-	parts := strings.Split(filePath, string(os.PathSeparator))
-	for i, part := range parts {
-		if part == "basic" && i+1 < len(parts) {
-			return parts[i+1] // The next part should be the namespace
-		}
-	}
-	return "default" // fallback to default namespace
-}
 
 // parseLogrusLine parses a logrus-formatted log line
 func parseLogrusLine(line, defaultNamespace string) (CriticalEvent, error) {

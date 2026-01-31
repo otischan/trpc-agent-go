@@ -28,11 +28,30 @@ basic:
   dry_run: false
 
 monitoring:
-  enable_monitor: true
-  enable_alert: true
-  enable_remediation: false
-  enable_decision: false
-  namespace: default
+  enable_monitor_resources: true
+  enable_monitor_events: true
+  namespaces: ["default", "kube-system", "monitoring"] # 监控的命名空间列表 (支持多个命名空间)
   kubeconfig: ""
   metrics_port: 8080
   aggregation_interval_minutes: 10
+
+rule_engine:
+  enable_rule_engine: false
+  namespace: default
+  kubeconfig: ""
+  metrics_port: 8082
+  aggregation_interval_minutes: 10
+  rule_check_interval: 60
+
+ai_decision:
+  enable_ai_decision: false
+  namespace: default
+  metrics_port: 8083
+  decision_interval: 120
+  max_concurrent_requests: 5
+
+k8s_operation:
+  enable_k8s_operation: true
+  namespace: default
+  metrics_port: 8084
+  max_concurrent_operations: 10
