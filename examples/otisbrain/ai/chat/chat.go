@@ -40,6 +40,7 @@ type AIChat struct {
 	logger         *basic.BasicLogger
 	skillRepo      skill.Repository
 	mcpToolSets    []*mcp.ToolSet
+	toolManager    *tools.ToolManager
 }
 
 // NewAIChat creates a new AI chat instance
@@ -109,6 +110,9 @@ func (c *AIChat) setup(ctx context.Context) error {
 		c.skillRepo = repo  // Store the repository for later use
 	}
 
+	// Initialize the tool manager
+	c.toolManager = tools.NewToolManager(skillsRoot)
+
 	// Initialize MCP toolsets based on the list of servers in config
 	var toolSets []tool.ToolSet
 	c.mcpToolSets = []*mcp.ToolSet{} // Initialize the slice
@@ -158,7 +162,10 @@ func (c *AIChat) setup(ctx context.Context) error {
 		llmagent.WithDescription("An AI assistant for the OtisBrain K8S monitoring system."),
 		llmagent.WithInstruction(`You are an AI assistant for the OtisBrain K8S monitoring system.
 			Help users understand cluster status, investigate issues, and suggest solutions.
-			Use tools when helpful to access monitoring data. You can load and run skills to access critical monitoring data.`),
+			Follow the tool usage priority:
+			1. First try MCP tools if available
+			2. For skills, first load and read the complete skill documentation using skill_load/skill_list_doc before making decisions
+			3. Then execute skills directly using skill_run when appropriate`),
 		llmagent.WithGenerationConfig(genConfig),
 		llmagent.WithEnableParallelTools(false), // Disable parallel tools for simplicity
 	}
@@ -173,6 +180,7 @@ func (c *AIChat) setup(ctx context.Context) error {
 		llmAgentOptions = append(llmAgentOptions, llmagent.WithToolSets(toolSets))
 	}
 
+	// Create LLM agent with custom tool handling
 	llmAgent := llmagent.New(
 		"otisbrain-assistant",
 		llmAgentOptions...,
@@ -433,5 +441,16 @@ func (c *AIChat) getRecentCriticalEvents(ctx context.Context, _ struct{}) (strin
 	}
 
 	return tools.FormatCriticalEventsResult(result), nil
+}
+
+// ExecuteToolByPriority executes tools based on the priority order
+func (c *AIChat) ExecuteToolByPriority(ctx context.Context, toolName string, params map[string]interface{}) (string, error) {
+	if c.toolManager != nil {
+		return c.toolManager.ExecuteToolByPriority(ctx, toolName, params)
+	}
+
+	// Fallback to direct skill execution if tool manager is not available
+	skillExecutor := tools.NewSkillExecutor(filepath.Join(".", "resources", "skills"))
+	return skillExecutor.LoadAndExecuteSkill(ctx, toolName, params)
 }
 
