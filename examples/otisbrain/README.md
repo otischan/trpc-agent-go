@@ -51,8 +51,7 @@ otisbrain/
 │       ├── ai_analysis_tool.go         # AI分析工具
 │       └── predictive_tool.go          # 预测性维护工具
 ├── ai/chat/                            # AI聊天界面
-│   ├── chat.go                         # 交互式聊天界面
-│   └── silent_chat.go                  # 后台静默聊天接口
+│   └── chat.go                         # 交互式聊天界面
 ├── ai/tools/                           # AI技能系统
 │   ├── critical_events.go              # 关键事件检索工具
 │   └── register.go                     # 技能注册系统

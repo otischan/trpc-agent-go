@@ -16,8 +16,7 @@ import (
 	"trpc.group/trpc-go/trpc-agent-go/model/openai"
 	"trpc.group/trpc-go/trpc-agent-go/runner"
 	sessioninmemory "trpc.group/trpc-go/trpc-agent-go/session/inmemory"
-	"trpc.group/trpc-go/trpc-agent-go/tool"
-	"trpc.group/trpc-go/trpc-agent-go/tool/function"
+	"trpc.group/trpc-go/trpc-agent-go/skill"
 
 	"trpc.group/trpc-go/trpc-agent-go/examples/otisbrain/ai/tools"
 	"trpc.group/trpc-go/trpc-agent-go/examples/otisbrain/basic"
@@ -60,7 +59,7 @@ func (c *AIChat) Run(ctx context.Context) error {
 	return c.startChat(ctx)
 }
 
-// setup builds the runner with a model, tools, and the in-memory session store.
+// setup builds the runner with a model, skills, and the in-memory session store.
 func (c *AIChat) setup(_ context.Context) error {
 	// Create model instance
 	modelInstance := openai.New(c.modelName,
@@ -71,35 +70,14 @@ func (c *AIChat) setup(_ context.Context) error {
 
 	sessionService := sessioninmemory.NewSessionService()
 
-	// Create tools for the AI assistant
-	// Tool to read critical summaries
-	readSummaryTool := function.NewFunctionTool(
-		c.readCriticalSummary,
-		function.WithName("read_critical_summary"),
-		function.WithDescription("Read the latest critical summary from the monitoring system"),
-	)
-
-	// Tool to read all critical records
-	readAllRecordsTool := function.NewFunctionTool(
-		c.readAllCriticalRecords,
-		function.WithName("read_all_critical_records"),
-		function.WithDescription("Read all critical records from the monitoring system"),
-	)
-
-	// Initialize skill executor to load skills from the resources directory
-	skillExecutor := tools.NewSkillExecutor("../resources/skills")
-
-	// Attempt to load skills from YAML files
-	availableSkills, err := skillExecutor.GetAvailableSkills()
+	// Skills repository - dynamically load skills from resources directory
+	skillsRoot := "../resources/skills"
+	repo, err := skill.NewFSRepository(skillsRoot)
 	if err != nil {
-		// If skill loading fails, continue with basic tools only
-		c.logger.Printf("Warning: Could not load skills from directory: %v", err)
+		c.logger.Printf("Warning: Could not initialize skills repository: %v", err)
 	} else {
-		c.logger.Printf("Loaded %d skills from resources", len(availableSkills))
+		c.logger.Printf("Skills repository initialized from: %s", skillsRoot)
 	}
-
-	// Combine all tools
-	allTools := []tool.Tool{readSummaryTool, readAllRecordsTool}
 
 	genConfig := model.GenerationConfig{
 		MaxTokens:   utils.IntPtr(2000),
@@ -107,16 +85,25 @@ func (c *AIChat) setup(_ context.Context) error {
 		Stream:      c.streaming,
 	}
 
-	llmAgent := llmagent.New(
-		"otisbrain-assistant",
+	// Create LLM agent with skills support
+	llmAgentOptions := []llmagent.Option{
 		llmagent.WithModel(modelInstance),
 		llmagent.WithDescription("An AI assistant for the OtisBrain K8S monitoring system."),
 		llmagent.WithInstruction(`You are an AI assistant for the OtisBrain K8S monitoring system.
 			Help users understand cluster status, investigate issues, and suggest solutions.
-			Use tools when helpful to access monitoring data. The 'get_recent_critical_events' tool is particularly useful for getting recent critical events with filtering options.`),
+			Use tools when helpful to access monitoring data. You can load and run skills to access critical monitoring data.`),
 		llmagent.WithGenerationConfig(genConfig),
-		llmagent.WithTools(allTools),
 		llmagent.WithEnableParallelTools(false), // Disable parallel tools for simplicity
+	}
+
+	// Add skills support if repository is available
+	if repo != nil {
+		llmAgentOptions = append(llmAgentOptions, llmagent.WithSkills(repo))
+	}
+
+	llmAgent := llmagent.New(
+		"otisbrain-assistant",
+		llmAgentOptions...,
 	)
 
 	c.runner = runner.NewRunner(
@@ -295,30 +282,6 @@ func (c *AIChat) displayContent(
 	}
 	fmt.Print(content)
 	*fullContent += content
-}
-
-// Tool request structures
-type ReadCriticalSummaryRequest struct{}
-
-type ReadAllCriticalRecordsRequest struct{}
-
-// Tool implementations
-func (c *AIChat) readCriticalSummary(ctx context.Context, _ struct{}) (string, error) {
-	reader := basic.NewAIAgentReader()
-	summary, err := reader.ReadLatestCriticalSummary()
-	if err != nil {
-		return fmt.Sprintf("Error reading critical summary: %v", err), nil
-	}
-	return summary, nil
-}
-
-func (c *AIChat) readAllCriticalRecords(ctx context.Context, _ struct{}) (string, error) {
-	reader := basic.NewAIAgentReader()
-	records, err := reader.GetAllCriticalRecords()
-	if err != nil {
-		return fmt.Sprintf("Error reading critical records: %v", err), nil
-	}
-	return records, nil
 }
 
 // getRecentCriticalEvents retrieves recent critical events based on user request

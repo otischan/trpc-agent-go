@@ -3,6 +3,7 @@ module trpc.group/trpc-go/trpc-agent-go/examples/otisbrain
 go 1.21
 
 require (
+	github.com/google/uuid v1.6.0
 	github.com/sirupsen/logrus v1.9.4
 	gopkg.in/yaml.v2 v2.4.0
 	k8s.io/api v0.28.0
@@ -26,7 +27,6 @@ require (
 	github.com/google/gnostic-models v0.6.8 // indirect
 	github.com/google/go-cmp v0.6.0 // indirect
 	github.com/google/gofuzz v1.2.0 // indirect
-	github.com/google/uuid v1.6.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.22.0 // indirect
 	github.com/imdario/mergo v0.3.6 // indirect
 	github.com/josharian/intern v1.0.0 // indirect

@@ -12,7 +12,7 @@ import (
 type AIConsoleAgent struct {
 	config *config.Config
 	logger *basic.BasicLogger
-	chat   *chat.SilentAIChat
+	chat   *chat.AIChat
 	ctx    context.Context
 	cancel context.CancelFunc
 }
@@ -32,17 +32,17 @@ func NewAIConsoleAgent(cfg *config.Config, logger *basic.BasicLogger) *AIConsole
 // Start starts the AI console agent in a goroutine
 func (aca *AIConsoleAgent) Start() error {
 	aca.logger.Info("Starting AI Console Agent...")
-	
-	// Create the silent chat instance
-	aca.chat = chat.NewSilentAIChat(aca.config, aca.logger)
-	
+
+	// Create the chat instance
+	aca.chat = chat.NewAIChat(aca.config, aca.logger)
+
 	// Run the chat in a goroutine
 	go func() {
 		if err := aca.chat.Run(aca.ctx); err != nil {
 			aca.logger.Errorf("AI Console error: %v", err)
 		}
 	}()
-	
+
 	aca.logger.Info("AI Console Agent started successfully")
 	return nil
 }
