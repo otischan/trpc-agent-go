@@ -1,0 +1,19 @@
+log_level: info
+metrics_port: 8080
+namespace: default
+kubeconfig: ""
+
+llm:
+  model: gpt-4o-mini
+  api_key: ""
+  base_url: ""
+  enabled: false
+
+rules:
+  alert_rules_file: "./rules/alert_rules.yaml"
+  remediation_rules_file: "./rules/remediation_rules.yaml"
+
+basic:
+  interval_seconds: 30
+  max_retries: 3
+  dry_run: false
