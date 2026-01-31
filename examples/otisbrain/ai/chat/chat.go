@@ -16,10 +16,11 @@ import (
 	"trpc.group/trpc-go/trpc-agent-go/model"
 	"trpc.group/trpc-go/trpc-agent-go/model/openai"
 	"trpc.group/trpc-go/trpc-agent-go/runner"
-	sessioninmemory "trpc.group/trpc-go/trpc-agent-go/session/inmemory"
 	"trpc.group/trpc-go/trpc-agent-go/skill"
+	"trpc.group/trpc-go/trpc-agent-go/tool"
 	"trpc.group/trpc-go/trpc-agent-go/tool/mcp"
 	tmcp "trpc.group/trpc-go/trpc-mcp-go"
+	sessioninmemory "trpc.group/trpc-go/trpc-agent-go/session/inmemory"
 
 	"trpc.group/trpc-go/trpc-agent-go/examples/otisbrain/ai/tools"
 	"trpc.group/trpc-go/trpc-agent-go/examples/otisbrain/basic"

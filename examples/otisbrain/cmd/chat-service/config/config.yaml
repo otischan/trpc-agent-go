@@ -1,0 +1,26 @@
+log_level: info                    # 日志级别 (debug, info, warn, error)
+metrics_port: 8081                 # 暴露Prometheus指标的端口
+
+llm:                               # 大语言模型配置
+  model: gpt-4o-mini               # 使用的AI模型
+  api_key: ""                      # AI模型API密钥
+  base_url: ""                     # AI模型API基础URL
+  enabled: true                    # 是否启用AI功能
+
+mcp:                               # MCP服务器配置
+  servers:
+    - name: "k8s-monitoring-mcp"
+      enabled: false
+      transport: "streamable_http"
+      server_url: "http://localhost:3000/mcp"
+      timeout: 10
+      headers: {}
+
+skills:                            # 技能系统配置
+  directory: "../../resources/skills" # 技能定义目录
+  auto_reload: true                # 是否自动重载技能定义
+
+chat:                              # 聊天界面配置
+  enable_streaming: true           # 是否启用流式响应
+  max_tokens: 2000                 # 最大响应token数
+  temperature: 0.7                 # AI响应温度

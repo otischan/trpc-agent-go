@@ -2,10 +2,13 @@
 
 ## 项目概述
 
-OtisBrain 是一个基于 tRPC-Agent-Go 框架构建的 Kubernetes 集群智能监控和运维系统。该系统采用前后台分离架构：
+OtisBrain 是一个基于 tRPC-Agent-Go 框架构建的 Kubernetes 集群智能监控和运维系统。该系统采用微服务架构，拆分为五个独立的服务：
 
-1. **后台监控任务**：持续运行的监控、告警和修复任务，在后台默默守护集群健康
-2. **前台交互界面**：提供实时聊天界面，让用户可以随时与系统交互，获取集群信息和执行运维操作
+1. **监控服务 (monitoring-service)**：持续运行的监控、告警和修复任务，在后台默默守护集群健康
+2. **聊天服务 (chat-service)**：提供实时聊天界面，让用户可以随时与系统交互，获取集群信息和执行运维操作
+3. **规则引擎服务 (rule-engine-service)**：基于预设规则分析异常并输出策略
+4. **AI决策服务 (ai-decision-service)**：与LLM交互，基于监控数据生成决策
+5. **MCP操作服务 (mcp-service)**：统化K8S操作接口
 
 系统能够监控指定命名空间的资源状态，并根据预设规则和AI推理执行智能化运维操作。
 
@@ -16,20 +19,40 @@ OtisBrain 是一个基于 tRPC-Agent-Go 框架构建的 Kubernetes 集群智能�
 ```
 otisbrain/
 ├── README.md                           # 本文件 - 项目说明文档
-├── main.go                             # 主入口程序
-├── config/                             # 配置管理
-│   ├── config.go                       # 配置结构体定义
-│   └── config.yaml                     # 默认配置文件
+├── go.mod                              # Go模块定义
+├── go.sum                              # Go依赖校验
+├── cmd/                                # 命令行工具目录
+│   ├── monitoring-service/             # 监控服务
+│   │   ├── main.go                     # 监控服务主入口
+│   │   └── config/                     # 监控服务配置
+│   │       └── config.yaml             # 监控服务配置文件
+│   ├── chat-service/                   # 聊天服务
+│   │   ├── main.go                     # 聊天服务主入口
+│   │   └── config/                     # 聊天服务配置
+│   │       └── config.yaml             # 聊天服务配置文件
+│   ├── rule-engine-service/            # 规则引擎服务
+│   │   ├── main.go                     # 规则引擎服务主入口
+│   │   └── config/                     # 规则引擎服务配置
+│   │       └── config.yaml             # 规则引擎服务配置文件
+│   ├── ai-decision-service/            # AI决策服务
+│   │   ├── main.go                     # AI决策服务主入口
+│   │   └── config/                     # AI决策服务配置
+│   │       └── config.yaml             # AI决策服务配置文件
+│   └── mcp-service/                    # MCP操作服务
+│       ├── main.go                     # MCP操作服务主入口
+│       └── config/                     # MCP操作服务配置
+│           └── config.yaml             # MCP操作服务配置文件
 ├── basic/                              # 基础监控与运维层
 │   ├── monitor/                        # 基础监控模块
 │   │   ├── collector.go                # 指标收集器
 │   │   ├── events.go                   # 事件监听器
-│   │   ├── health_checker.go           # 健康检查器
+│   │   ├── health_checker.go           # 偵康检查器
 │   │   └── metrics.go                  # 指标定义
 │   ├── agent/                          # 基础代理
 │   │   ├── basic_monitor_agent.go      # 基础K8S监控代理
 │   │   ├── basic_alert_agent.go        # 基础告警处理代理
-│   │   └── basic_remediation_agent.go  # 基础自动修复代理
+│   │   ├── basic_remediation_agent.go  # 基础自动修复代理
+│   │   └── basic_rule_engine_agent.go  # 基础规则引擎代理
 │   ├── rules/                          # 基础规则引擎
 │   │   ├── basic_rule_engine.go        # 基础规则引擎核心
 │   │   ├── alert_rules.go              # 基础告警规则定义
@@ -43,19 +66,20 @@ otisbrain/
 │   │   ├── ai_monitor_agent.go         # AI增强监控代理
 │   │   ├── ai_alert_agent.go           # AI增强告警处理代理
 │   │   ├── ai_remediation_agent.go     # AI增强自动修复代理
-│   │   └── decision_agent.go           # AI决策制定代理
+│   │   ├── decision_agent.go           # AI决策制定代理
+│   │   └── ai_decision_agent.go        # AI决策服务代理
 │   ├── rules/                          # AI增强规则引擎
 │   │   ├── ai_rule_engine.go           # AI增强规则引擎
 │   │   └── adaptive_rules.go           # 自适应规则定义
 │   └── tools/                          # AI增强工具集
 │       ├── ai_analysis_tool.go         # AI分析工具
-│       └── predictive_tool.go          # 预测性维护工具
+│       └── predictive_tool.go          # 颌测性维护工具
 ├── ai/chat/                            # AI聊天界面
 │   └── chat.go                         # 交互式聊天界面
 ├── ai/tools/                           # AI技能系统
 │   ├── critical_events.go              # 关键事件检索工具
 │   └── register.go                     # 技能注册系统
-├── shared/                             # 共享组件
+├── shared/                             # 兲享组件
 │   ├── k8sclient/                      # K8S客户端封装
 │   │   ├── client.go                   # K8S客户端初始化
 │   │   ├── pod_operations.go           # Pod操作接口
@@ -91,11 +115,11 @@ otisbrain/
     └── sample_manifests/               # 示例清单文件
 ```
 
-### 功能分层
+### 服务拆分说明
 
-#### 后台监控任务
+#### 监控服务 (monitoring-service)
 
-此层提供持续运行的K8S监控和运维功能，默默守护集群健康：
+此服务专注于后台持续运行的K8S监控和运维功能：
 
 - **基础监控代理**：监控Pod状态、Deployment副本数、Service可用性等
 - **事件监听**：监听K8S API的事件流，捕获异常事件
@@ -104,14 +128,71 @@ otisbrain/
 - **AI增强监控**：使用AI进行异常模式识别和预测性分析
 - **AI增强告警**：AI辅助的告警分类和优先级排序
 - **关键信息聚合**：按配置指定间隔周期汇总关键异常信息
+- **数据持久化**：将监控数据和事件存储到共享存储中
 
-#### 前台交互界面
+**特点**：
+- 不与 LLM 交互，专注于数据收集和处理
+- 高可用性：独立运行，不受 LLM 服务状态影响
+- 性能优化：专门处理监控任务，无需承担 LLM 通信开销
+- 可扩展性：可根据监控负载独立扩展
 
-此层提供实时聊天界面，让用户可以随时与系统交互：
+#### 聊天服务 (chat-service)
+
+此服务专注于用户交互和AI对话功能：
 
 - **交互式聊天**：提供实时对话界面，用户可以查询集群状态
 - **工具调用**：通过聊天界面调用监控和查询工具
 - **实时反馈**：即时获取集群信息和运维建议
+- **AI交互**：与大语言模型进行对话，提供智能分析和决策
+- **技能系统**：集成技能系统，允许AI助手执行特定任务
+
+**特点**：
+- 专注于用户交互和 LLM 对话
+- 响应性：专门处理用户请求，响应更快
+- 资源隔离：LLM 调用不会影响监控任务
+- 独立部署：可根据用户访问量独立扩展
+
+#### 规则引擎服务 (rule-engine-service)
+
+此服务专注于基于预设规则分析异常并输出策略：
+
+- **规则匹配**：根据预定义规则匹配监控到的异常
+- **策略生成**：基于匹配结果生成修复或调整策略
+- **策略执行**：通过MCP服务执行生成的策略
+- **规则管理**：支持动态加载和更新规则
+
+**特点**：
+- 快速响应：基于预设规则快速生成策略
+- 确定性：基于明确规则，行为可预测
+- 可扩展性：支持多种类型的规则和策略
+
+#### AI决策服务 (ai-decision-service)
+
+此服务专注于与LLM交互，基于监控数据生成决策：
+
+- **数据聚合**：从监控服务收集异常数据
+- **Prompt构建**：将监控数据转化为适合LLM的格式
+- **AI交互**：与大语言模型交互，获取决策建议
+- **决策执行**：通过MCP服务执行AI生成的策略
+
+**特点**：
+- 智能决策：利用AI模型进行复杂分析
+- 自适应：能够处理未预见的问题
+- 上下文感知：考虑历史数据和环境因素
+
+#### MCP操作服务 (mcp-service)
+
+此服务专注于统化K8S操作接口：
+
+- **接口封装**：统一封装K8S API操作
+- **安全控制**：实施权限控制和审计
+- **操作抽象**：提供高层操作接口
+- **状态同步**：确保操作状态的一致性
+
+**特点**：
+- 统一接口：为所有服务提供一致的K8S操作接口
+- 安全性：集中权限管理和审计
+- 可靠性：确保操作的安全和一致性
 
 ### 日志管理与运行输出
 
@@ -160,7 +241,7 @@ logs/
 
 ### 设计理念
 
-1. **前后台分离架构**：后台持续监控与前台交互界面分离，确保监控不间断且用户可随时交互
+1. **微服务架构**：五个服务分离，确保各司其职且可独立扩展
 2. **多代理协作**：采用多个专业代理协同工作的模式，每个代理负责特定任务
 3. **可观察性**：全面的指标、日志和追踪能力
 4. **渐进式智能**：基础功能不依赖AI，AI作为增强层提供智能分析能力
@@ -178,7 +259,7 @@ logs/
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
 │  ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────────────┐ │
-│  │   前台交互层     │    │   后台监控层     │    │      AI增强层          │ │
+│  │   聊天服务       │    │   监控服务       │    │      AI增强层          │ │
 │  │                 │    │                 │    │                       │ │
 │  │  ┌─────────────┐│    │  ┌─────────────┐│    │  ┌───────────────────┐ │ │
 │  │  │  Chat UI    ││    │  │  Monitor    ││    │  │  AI Agents        │ │ │
@@ -192,8 +273,8 @@ logs/
 │  │  │ Skills      ││    │  │             ││    │            │           │ │
 │  │  │ Registry    ││    │  │             ││    │            │           │ │
 │  │  │             ││    │  │             ││    │            ▼           │ │
-│  │  │ - Event     ││    │  │             ││    │  ┌───────────────────┐ │ │
-│  │  │   Query     ││◄───┼──┤             ││    │  │  AI Tools         │ │ │
+│  │  │ - Event     ││◄───┼──┤             ││    │  ┌───────────────────┐ │ │
+│  │  │   Query     ││    │  │             ││    │  │  AI Tools         │ │ │
 │  │  │ - Resource  ││    │  │             ││    │  │                   │ │ │
 │  │  │   Query     ││    │  │             ││    │  │  - Analysis       │ │ │
 │  │  │ - ...       ││    │  │             ││    │  │  - Prediction     │ │ │
@@ -236,7 +317,8 @@ logs/
 │                         │  │             ││    │                         │ │
 │                         │  │             ││    │                         │ │
 │                         │  │             ││    │                         │ │
-│                         │  │             ││    │                         │ │
+│                         │  │             ││    │......
+```
 
 ### 核心代理设计
 
@@ -330,14 +412,14 @@ logs/
 
 ## 使用场景
 
-### 后台监控任务应用场景
+### 监控服务应用场景
 
 1. **持续生产环境监控**: 实时监控关键应用的健康状况，后台持续运行
 2. **自动故障恢复**: 在检测到问题时自动执行预定义的修复操作
 3. **自动合规性检查**: 定期检查配置是否符合安全标准
 4. **关键信息周期汇总**: 按配置指定间隔周期汇总关键异常信息
 
-### 前台交互界面应用场景
+### 聊天服务应用场景
 
 1. **实时状态查询**: 用户可随时询问集群当前状态
 2. **问题诊断咨询**: 与AI助手对话，获取问题诊断和解决建议
@@ -345,21 +427,47 @@ logs/
 4. **异常信息查询**: 查询近期发生的异常事件和处理情况
 5. **技能化操作**: 通过自然语言调用预定义技能，如查询关键事件、资源使用情况等
 
+### 规则引擎服务应用场景
+
+1. **自动化策略生成**: 基于预设规则自动分析异常并生成修复策略
+2. **快速响应**: 对常见问题快速生成处理方案
+3. **确定性决策**: 基于明确规则的可预测行为
+4. **规则管理**: 动态加载和更新规则
+
+### AI决策服务应用场景
+
+1. **智能决策**: 利用AI模型进行复杂问题分析
+2. **自适应处理**: 处理未预见的问题
+3. **上下文感知**: 考虑历史数据和环境因素
+4. **高级分析**: 提供深度分析和建议
+
+### MCP操作服务应用场景
+
+1. **统一接口**: 为所有服务提供一致的K8S操作接口
+2. **安全控制**: 集中权限管理和审计
+3. **操作抽象**: 提供高层操作接口
+4. **状态同步**: 确保操作状态的一致性
+
 ## 部署方式
 
-此项目构建为单个二进制程序，可通过以下方式运行：
-- 本地运行：直接在本地机器上运行二进制文件
-- 集群内部运行：在K8S集群内部作为Pod运行
+此项目拆分为五个独立的二进制程序，可通过以下方式运行：
 
-## 前后台分离架构优势
+- **监控服务**：`./cmd/monitoring-service/monitoring-service`
+- **聊天服务**：`./cmd/chat-service/chat-service`
+- **规则引擎服务**：`./cmd/rule-engine-service/rule-engine-service`
+- **AI决策服务**：`./cmd/ai-decision-service/ai-decision-service`
+- **MCP操作服务**：`./cmd/mcp-service/mcp-service`
+- **集群内部运行**：在K8S集群内部作为独立Pod运行
 
-1. **高可用性**: 后台监控功能持续运行，确保集群监控不间断
-2. **实时交互**: 前台聊天界面提供即时交互体验
-3. **灵活性**: 用户可随时与系统交互，同时后台任务持续运行
-4. **成本效益**: 后台监控与前台交互可独立配置和扩展
-5. **用户体验**: 提供直观的聊天界面，方便用户获取信息和指导
-6. **并行处理**: 后台任务与前台交互并行运行，互不影响
-7. **扩展性强**: 通过技能系统可轻松扩展AI助手的能力
+## 微服务架构优势
+
+1. **高可用性**: 监控服务持续运行，确保集群监控不间断
+2. **独立扩展**: 每个服务可独立配置和扩展
+3. **故障隔离**: 一个服务故障不会影响其他服务
+4. **资源优化**: 每个服务专注于特定任务，资源利用更高效
+5. **开发效率**: 团队可以并行开发不同服务
+6. **技术灵活性**: 可以为不同服务选择最适合的技术栈
+7. **专业分工**: 每个服务专注于特定领域，实现专业化处理
 
 ## 未来发展方向
 
@@ -374,19 +482,9 @@ logs/
 
 ## 快速开始
 
-### 配置文件
+### 监控服务配置
 
-程序的所有参数现在都通过配置文件进行管理。配置文件位于 `config/config.yaml`，包含以下主要配置项：
-
-### 技能系统
-
-OtisBrain 集成了技能系统，允许AI助手执行特定任务：
-
-- **关键事件检索**: 通过 `get_recent_critical_events` 技能查询近期关键事件
-- **资源查询**: 通过 `get_cluster_resources` 技能获取集群资源使用情况
-- **扩展能力**: 可通过添加新的YAML定义和Go实现来扩展技能
-
-技能定义位于 `resources/skills/` 目录，AI助手可以自然地调用这些技能来完成特定任务。
+监控服务的配置文件位于 `cmd/monitoring-service/config/config.yaml`，包含以下主要配置项：
 
 ```yaml
 log_level: info                    # 日志级别 (debug, info, warn, error)
@@ -394,7 +492,7 @@ metrics_port: 8080                 # 暴露Prometheus指标的端口
 namespace: default                 # 监控的目标命名空间
 kubeconfig: ""                     # K8S集群认证配置文件路径
 
-llm:                               # 大语言模型配置
+llm:                               # 大语言模型配置（仅用于AI增强功能）
   model: gpt-4o-mini               # 使用的AI模型
   api_key: ""                      # AI模型API密钥
   base_url: ""                     # AI模型API基础URL
@@ -420,72 +518,144 @@ monitoring:                        # 监控代理配置
   aggregation_interval_minutes: 10 # 日志聚合间隔（分钟），即每10分钟对关键事件进行一次汇总
 ```
 
-### 配置说明
+### 聊天服务配置
 
-- **log_level**: 控制日志输出级别，支持 debug, info, warn, error
-- **metrics_port**: Prometheus指标暴露端口
-- **namespace**: 要监控的Kubernetes命名空间
-- **kubeconfig**: K8S集群认证配置文件路径
-- **llm**: 大语言模型相关配置，包括模型类型、API密钥等
-- **rules**: 规则引擎配置，指定告警和修复规则文件位置
-- **basic**: 基础监控配置，包括监控间隔、重试次数等
-- **monitoring**: 监控代理配置，控制各个代理的启停状态
-- **aggregation_interval_minutes**: 关键事件聚合间隔，控制每多少分钟对basic路径下的日志进行整理、去重和汇总
-
-### 示例配置
+聊天服务的配置文件位于 `cmd/chat-service/config/config.yaml`，包含以下主要配置项：
 
 ```yaml
-# 生产环境示例配置
-log_level: info
-metrics_port: 8080
-namespace: production
+log_level: info                    # 日志级别 (debug, info, warn, error)
+metrics_port: 8081                 # 暴露Prometheus指标的端口
 
-llm:
-  model: gpt-4o
-  api_key: "your-api-key-here"
-  base_url: "https://api.openai.com/v1"
-  enabled: true
+llm:                               # 大语言模型配置
+  model: gpt-4o-mini               # 使用的AI模型
+  api_key: ""                      # AI模型API密钥
+  base_url: ""                     # AI模型API基础URL
+  enabled: true                    # 是否启用AI功能
 
-basic:
-  interval_seconds: 15
-  max_retries: 5
-  dry_run: false
+mcp:                               # MCP服务器配置
+  servers:
+    - name: "k8s-monitoring-mcp"
+      enabled: false
+      transport: "streamable_http"
+      server_url: "http://localhost:3000/mcp"
+      timeout: 10
+      headers: {}
 
-monitoring:
-  enable_monitor: true
-  enable_alert: true
-  enable_remediation: true
-  enable_decision: true
-  namespace: production
-  aggregation_interval_minutes: 10  # 每10分钟聚合一次关键事件
+skills:                            # 技能系统配置
+  directory: "../../resources/skills" # 技能定义目录
+  auto_reload: true                # 是否自动重载技能定义
+
+chat:                              # 聊天界面配置
+  enable_streaming: true           # 是否启用流式响应
+  max_tokens: 2000                 # 最大响应token数
+  temperature: 0.7                 # AI响应温度
 ```
 
+### 规则引擎服务配置
+
+规则引擎服务的配置文件位于 `cmd/rule-engine-service/config/config.yaml`，包含以下主要配置项：
+
 ```yaml
-# 测试环境示例配置
-log_level: debug
-namespace: test
+log_level: info                    # 日志级别 (debug, info, warn, error)
+metrics_port: 8082                 # 暴露Prometheus指标的端口
+namespace: default                 # 监控的目标命名空间
 
-basic:
-  interval_seconds: 30
-  max_retries: 3
-  dry_run: true  # 演练模式，不执行实际操作
+rules:                             # 规则引擎配置
+  alert_rules_file: "./rules/alert_rules.yaml"       # 告警规则文件路径
+  remediation_rules_file: "./rules/remediation_rules.yaml" # 修复规则文件路径
 
-monitoring:
-  enable_monitor: true
-  enable_alert: true
-  enable_remediation: false  # 测试环境禁用自动修复
-  enable_decision: false
-  aggregation_interval_minutes: 5  # 测试环境缩短聚合间隔
+basic:                             # 基础监控配置
+  interval_seconds: 30             # 监控间隔秒数
+  max_retries: 3                   # 最大重试次数
+  dry_run: false                   # 是否演练模式（不执行实际操作）
+
+rule_engine:                       # 规则引擎配置
+  enable_rule_engine: true         # 是否启用规则引擎
+  namespace: default               # 监控的命名空间
+  metrics_port: 8082               # 暴露指标的端口
+  aggregation_interval_minutes: 10 # 日志聚合间隔（分钟），即每10分钟对关键事件进行一次汇总
+  rule_check_interval: 60          # 规则检查间隔（秒）
+```
+
+### AI决策服务配置
+
+AI决策服务的配置文件位于 `cmd/ai-decision-service/config/config.yaml`，包含以下主要配置项：
+
+```yaml
+log_level: info                    # 日志级别 (debug, info, warn, error)
+metrics_port: 8083                 # 暴露Prometheus指标的端口
+
+llm:                               # 大语言模型配置
+  model: gpt-4o-mini               # 使用的AI模型
+  api_key: ""                      # AI模型API密钥
+  base_url: ""                     # AI模型API基础URL
+  enabled: true                    # 是否启用AI功能
+
+ai_decision:                       # AI决策服务配置
+  enable_ai_decision: true         # 是否启用AI决策
+  namespace: default               # 监控的命名空间
+  metrics_port: 8083               # 暴露指标的端口
+  decision_interval: 120           # 决策间隔（秒）
+  max_concurrent_requests: 5       # 最大并发请求数
+```
+
+### MCP操作服务配置
+
+MCP操作服务的配置文件位于 `cmd/mcp-service/config/config.yaml`，包含以下主要配置项：
+
+```yaml
+log_level: info                    # 日志级别 (debug, info, warn, error)
+metrics_port: 8084                 # 暴露Prometheus指标的端口
+
+mcp:                               # MCP服务器配置
+  servers:
+    - name: "k8s-operation-mcp"
+      enabled: true
+      transport: "streamable_http"
+      server_url: "http://localhost:3000/mcp"
+      timeout: 10
+      headers: {}
+
+k8s_operation:                    # K8S操作服务配置
+  enable_k8s_operation: true      # 是否启用K8S操作服务
+  namespace: default              # 操作的命名空间
+  metrics_port: 8084              # 暴露指标的端口
+  max_concurrent_operations: 10   # 最大并发操作数
 ```
 
 ### 运行程序
 
 ```bash
-# 使用默认配置文件运行
-./otisbrain
+# 构建监控服务
+cd cmd/monitoring-service
+go build -o monitoring-service .
+./monitoring-service
 
-# 指定自定义配置文件
-./otisbrain -config /path/to/custom/config.yaml
+# 构建聊天服务
+cd ../chat-service
+go build -o chat-service .
+./chat-service
+
+# 构建规则引擎服务
+cd ../rule-engine-service
+go build -o rule-engine-service .
+./rule-engine-service
+
+# 构建AI决策服务
+cd ../ai-decision-service
+go build -o ai-decision-service .
+./ai-decision-service
+
+# 构建MCP操作服务
+cd ../mcp-service
+go build -o mcp-service .
+./mcp-service
+
+# 或者使用Makefile（如果存在）
+make build-all
+
+# 或者使用构建脚本
+./build.sh
 ```
 
 ### 代理能力说明
@@ -517,6 +687,18 @@ monitoring:
    - 制定高级决策策略
    - 需要配置AI模型访问（可选）
    - 适合处理复杂或未知问题
+
+5. **规则引擎代理 (rule_engine.enable_rule_engine)**:
+   - 基于预设规则分析异常
+   - 生成修复或调整策略
+   - 通过MCP服务执行策略
+   - 支持动态规则管理
+
+6. **AI决策代理 (ai_decision.enable_ai_decision)**:
+   - 与LLM交互，基于监控数据生成决策
+   - 构建适合LLM的prompt格式
+   - 通过MCP服务执行AI生成的策略
+   - 考虑历史数据和上下文因素
 
 ### 关键事件聚合机制
 

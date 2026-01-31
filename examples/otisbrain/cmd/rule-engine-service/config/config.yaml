@@ -1,0 +1,19 @@
+log_level: info                    # 日志级别 (debug, info, warn, error)
+metrics_port: 8082                 # 暴露Prometheus指标的端口
+namespace: default                 # 监控的目标命名空间
+
+rules:                             # 规则引擎配置
+  alert_rules_file: "./rules/alert_rules.yaml"       # 告警规则文件路径
+  remediation_rules_file: "./rules/remediation_rules.yaml" # 修复规则文件路径
+
+basic:                             # 基础监控配置
+  interval_seconds: 30             # 监控间隔秒数
+  max_retries: 3                   # 最大重试次数
+  dry_run: false                   # 是否演练模式（不执行实际操作）
+
+rule_engine:                       # 规则引擎配置
+  enable_rule_engine: true         # 是否启用规则引擎
+  namespace: default               # 监控的命名空间
+  metrics_port: 8082               # 暴露指标的端口
+  aggregation_interval_minutes: 10 # 日志聚合间隔（分钟），即每10分钟对关键事件进行一次汇总
+  rule_check_interval: 60          # 规则检查间隔（秒）

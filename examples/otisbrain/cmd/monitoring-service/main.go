@@ -14,7 +14,6 @@ import (
 	"github.com/sirupsen/logrus"
 	aiagent "trpc.group/trpc-go/trpc-agent-go/examples/otisbrain/ai/agent"
 	basicagent "trpc.group/trpc-go/trpc-agent-go/examples/otisbrain/basic/agent"
-	"trpc.group/trpc-go/trpc-agent-go/examples/otisbrain/ai/chat"
 	"trpc.group/trpc-go/trpc-agent-go/examples/otisbrain/basic"
 	"trpc.group/trpc-go/trpc-agent-go/examples/otisbrain/config"
 	"trpc.group/trpc-go/trpc-agent-go/examples/otisbrain/shared/k8sclient"
@@ -24,7 +23,7 @@ var (
 	configPath = flag.String("config", "./config/config.yaml", "Path to the configuration file (default: \"./config/config.yaml\")")
 )
 
-// Global logger instance for chat interface
+// Global logger instance
 var consoleLogger *logrus.Logger
 var fileLogger *basic.BasicLogger
 
@@ -59,7 +58,7 @@ func setProjectRootEnv() {
 func findProjectRoot(startDir string) string {
 	currentDir := startDir
 
-	// 向上遍历目录树，直到找到项目根目录标识
+	// 向上遍历目录树，直到找到项目根目录
 	for {
 		// 检查当前目录是否包含项目标识文件
 		if hasProjectMarker(currentDir) {
@@ -220,27 +219,10 @@ func main() {
 		}()
 	}
 
-	// Start the foreground chat interface in the main thread
-	if cfg.LLM.Enabled {
-		// Clear any previous output and present clean chat interface
-		fmt.Print("\n\x1b[2J\x1b[H") // ANSI escape codes to clear screen
-		fmt.Println("🚀 OtisBrain AI Assistant Started!")
-		fmt.Println("Type your questions below. Type '/exit' to quit.\n")
+	consoleLogger.Info("Monitoring service started successfully")
 
-		// Create the interactive chat instance with console logger
-		aiChat := chat.NewAIChat(cfg, &basic.BasicLogger{Logger: consoleLogger})
+	// Wait for context cancellation
+	<-ctx.Done()
 
-		// Run the chat interface in the main thread (foreground) - this blocks
-		if err := aiChat.Run(ctx); err != nil {
-			consoleLogger.Errorf("AI Chat error: %v", err)
-		}
-	} else {
-		fmt.Println("LLM is not enabled in config. Chat interface will not start.")
-		fmt.Println("Current config enables LLM:", cfg.LLM.Enabled)
-
-		// If chat is not enabled, wait for context cancellation
-		<-ctx.Done()
-	}
-
-	consoleLogger.Info("Application stopped gracefully")
+	consoleLogger.Info("Monitoring service stopped gracefully")
 }

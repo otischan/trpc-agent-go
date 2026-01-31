@@ -17,6 +17,9 @@ type Config struct {
 	Rules         Rules      `yaml:"rules"`
 	Basic         Basic      `yaml:"basic"`
 	Monitoring    Monitoring `yaml:"monitoring"`
+	RuleEngine    RuleEngine `yaml:"rule_engine"`
+	AIDecision    AIDecision `yaml:"ai_decision"`
+	K8sOperation  K8sOperation `yaml:"k8s_operation"`
 }
 
 // LLM holds LLM-specific configurations
@@ -40,6 +43,33 @@ type MCPServer struct {
 // MCP holds MCP-specific configurations (now a list of servers)
 type MCP struct {
 	Servers []MCPServer `yaml:"servers"`
+}
+
+// RuleEngine holds rule engine service configurations
+type RuleEngine struct {
+	EnableRuleEngine       bool   `yaml:"enable_rule_engine"`
+	Namespace             string `yaml:"namespace"`
+	Kubeconfig            string `yaml:"kubeconfig"`
+	MetricsPort           int    `yaml:"metrics_port"`
+	AggregationInterval   int    `yaml:"aggregation_interval_minutes"` // Interval for aggregating logs in minutes
+	RuleCheckInterval     int    `yaml:"rule_check_interval"`         // Interval for checking rules in seconds
+}
+
+// AIDecision holds AI decision service configurations
+type AIDecision struct {
+	EnableAIDecision      bool   `yaml:"enable_ai_decision"`
+	Namespace             string `yaml:"namespace"`
+	MetricsPort           int    `yaml:"metrics_port"`
+	DecisionInterval      int    `yaml:"decision_interval"`            // Interval for AI decisions in seconds
+	MaxConcurrentRequests int    `yaml:"max_concurrent_requests"`
+}
+
+// K8sOperation holds K8s operation service configurations
+type K8sOperation struct {
+	EnableK8sOperation      bool   `yaml:"enable_k8s_operation"`
+	Namespace               string `yaml:"namespace"`
+	MetricsPort             int    `yaml:"metrics_port"`
+	MaxConcurrentOperations int    `yaml:"max_concurrent_operations"`
 }
 
 // Rules holds rule engine configurations
@@ -129,6 +159,27 @@ func getDefaultConfig() *Config {
 			Kubeconfig:          "",
 			MetricsPort:         8080,
 			AggregationInterval: 10, // Default to 10 minutes
+		},
+		RuleEngine: RuleEngine{
+			EnableRuleEngine:      true,
+			Namespace:             "default",
+			Kubeconfig:            "",
+			MetricsPort:           8082,
+			AggregationInterval:   10, // Default to 10 minutes
+			RuleCheckInterval:     60, // Default to 60 seconds
+		},
+		AIDecision: AIDecision{
+			EnableAIDecision:      false,
+			Namespace:             "default",
+			MetricsPort:           8083,
+			DecisionInterval:      120, // Default to 120 seconds
+			MaxConcurrentRequests: 5,
+		},
+		K8sOperation: K8sOperation{
+			EnableK8sOperation:      true,
+			Namespace:               "default",
+			MetricsPort:             8084,
+			MaxConcurrentOperations: 10,
 		},
 	}
 }
