@@ -7,7 +7,7 @@ llm:
   model: gpt-4o-mini
   api_key: ""
   base_url: ""
-  enabled: false
+  enabled: true
 
 rules:
   alert_rules_file: "./rules/alert_rules.yaml"
