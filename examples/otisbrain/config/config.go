@@ -99,15 +99,26 @@ type MemoryMonitoringConfig struct {
 	} `yaml:"oom_analysis"`
 }
 
+// PVCMonitoringConfig holds PVC monitoring-specific configurations
+type PVCMonitoringConfig struct {
+	Enabled              bool `yaml:"enabled"`
+	CollectionIntervalSeconds int `yaml:"collection_interval_seconds"` // 数据采集间隔（秒）
+	WarningThresholdPercent   int `yaml:"warning_threshold_percent"`   // 警告阈值（百分比）
+	MaxPodsDisplay       int `yaml:"max_pods_display"`                // 显示使用的Pod最大数量
+	RetentionDays        int `yaml:"retention_days"`                  // 数据保留天数
+}
+
 // Monitoring holds monitoring-specific configurations
 type Monitoring struct {
 	EnableMonitorResources bool `yaml:"enable_monitor_resources"`
 	EnableMonitorEvents    bool `yaml:"enable_monitor_events"`
+	EnableMonitorPVC       bool `yaml:"enable_monitor_pvc"`            // 是否启用PVC监控
 	Namespaces          []string `yaml:"namespaces"`          // Multiple namespaces for monitoring
 	Kubeconfig          string   `yaml:"kubeconfig"`
 	MetricsPort         int      `yaml:"metrics_port"`
 	AggregationInterval int      `yaml:"aggregation_interval_minutes"` // Interval for aggregating logs in minutes
 	MemoryMonitoring    MemoryMonitoringConfig `yaml:"memory_monitoring"` // Memory monitoring configuration
+	PVCMonitoring       PVCMonitoringConfig `yaml:"pvc_monitoring"`      // PVC monitoring configuration
 }
 
 // Validate validates the configuration parameters
@@ -150,6 +161,22 @@ func (c *Config) Validate() error {
 			}
 			if c.Monitoring.MemoryMonitoring.OOMAnalysis.MinDataPoints <= 0 {
 				return fmt.Errorf("OOM analysis min data points must be positive, got: %d", c.Monitoring.MemoryMonitoring.OOMAnalysis.MinDataPoints)
+			}
+		}
+
+		// Validate PVC monitoring configuration
+		if c.Monitoring.PVCMonitoring.Enabled {
+			if c.Monitoring.PVCMonitoring.CollectionIntervalSeconds <= 0 {
+				return fmt.Errorf("PVC monitoring collection interval must be positive, got: %d", c.Monitoring.PVCMonitoring.CollectionIntervalSeconds)
+			}
+			if c.Monitoring.PVCMonitoring.WarningThresholdPercent <= 0 || c.Monitoring.PVCMonitoring.WarningThresholdPercent > 100 {
+				return fmt.Errorf("PVC monitoring warning threshold must be between 1 and 100, got: %d", c.Monitoring.PVCMonitoring.WarningThresholdPercent)
+			}
+			if c.Monitoring.PVCMonitoring.MaxPodsDisplay <= 0 {
+				return fmt.Errorf("PVC monitoring max pods display must be positive, got: %d", c.Monitoring.PVCMonitoring.MaxPodsDisplay)
+			}
+			if c.Monitoring.PVCMonitoring.RetentionDays <= 0 {
+				return fmt.Errorf("PVC monitoring retention days must be positive, got: %d", c.Monitoring.PVCMonitoring.RetentionDays)
 			}
 		}
 	}
@@ -268,6 +295,13 @@ func getDefaultConfig() *Config {
 					MaxHistoryDays: 30,
 					MinDataPoints:  10,
 				},
+			},
+			PVCMonitoring: PVCMonitoringConfig{
+				Enabled:                 true,
+				CollectionIntervalSeconds: 300, // 默认5分钟
+				WarningThresholdPercent:   80,  // 默认80%
+				MaxPodsDisplay:            5,   // 默认最多显示5个Pod
+				RetentionDays:             7,   // 默认保留7天
 			},
 		},
 		RuleEngine: RuleEngine{

@@ -83,6 +83,18 @@ func (mnma *MultiNamespaceMonitorAgent) startNamespaceMonitoring(ctx context.Con
 						nsLogger.Errorf("Error collecting memory metrics for namespace %s: %v", namespace, err)
 					}
 				}
+
+				// Collect PVC metrics if enabled
+				if mnma.config.Monitoring.PVCMonitoring.Enabled {
+					pvcCollector := basic.NewPVCCollector(mnma.clientset, mnma.metricsClient, nsLogger,
+						mnma.config.Monitoring.PVCMonitoring.CollectionIntervalSeconds,
+						mnma.config.Monitoring.PVCMonitoring.WarningThresholdPercent,
+						mnma.config.Monitoring.PVCMonitoring.MaxPodsDisplay,
+						mnma.config.Monitoring.PVCMonitoring.RetentionDays)
+					if err := pvcCollector.CollectPVCMetrics(namespace); err != nil {
+						nsLogger.Errorf("Error collecting PVC metrics for namespace %s: %v", namespace, err)
+					}
+				}
 			case <-mnma.stopCh:
 				nsLogger.Info("MultiNamespaceMonitorAgent stopped for namespace: ", namespace)
 				return
@@ -130,6 +142,13 @@ func (mnma *MultiNamespaceMonitorAgent) monitorNamespace(namespace string, logge
 	// Monitor services
 	if err := mnma.monitorServices(namespace, logger); err != nil {
 		return fmt.Errorf("error monitoring services in namespace %s: %w", namespace, err)
+	}
+
+	// Monitor PVCs if enabled
+	if mnma.config.Monitoring.EnableMonitorPVC {
+		if err := mnma.monitorPVCs(namespace, logger); err != nil {
+			return fmt.Errorf("error monitoring PVCs in namespace %s: %w", namespace, err)
+		}
 	}
 
 	return nil
@@ -233,6 +252,59 @@ func (mnma *MultiNamespaceMonitorAgent) monitorDeployments(namespace string, log
 
 				mnma.writeCriticalEvent(namespace, "deployment", deployment.Name, string(condition.Type),
 					fmt.Sprintf("%s - %s", condition.Reason, condition.Message), logger)
+			}
+		}
+	}
+
+	return nil
+}
+
+// monitorPVCs monitors the status and usage of PVCs in the specified namespace
+func (mnma *MultiNamespaceMonitorAgent) monitorPVCs(namespace string, logger *logrus.Logger) error {
+	if !mnma.config.Monitoring.PVCMonitoring.Enabled {
+		return nil // PVC monitoring not enabled
+	}
+
+	pvcs, err := mnma.clientset.CoreV1().PersistentVolumeClaims(namespace).List(context.TODO(), metav1.ListOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to list PVCs in namespace %s: %w", namespace, err)
+	}
+
+	for _, pvc := range pvcs.Items {
+		// Check if PVC status is problematic (not bound)
+		if pvc.Status.Phase != corev1.ClaimBound {
+			logger.Warnf("CRITICAL EVENT: PVC %s/%s status: %s", namespace, pvc.Name, pvc.Status.Phase)
+			mnma.writeCriticalEvent(namespace, "pvc", pvc.Name, "PVCStatus", string(pvc.Status.Phase), logger)
+		}
+
+		// In a real implementation, we would check usage against threshold
+		// For now, we'll just log if the PVC is not bound or has other issues
+		if pvc.Status.Phase != corev1.ClaimBound {
+			logger.Warnf("CRITICAL EVENT: PVC %s/%s is not bound, status: %s", namespace, pvc.Name, pvc.Status.Phase)
+
+			// Create a temporary PVC collector to find pods using this PVC
+			tempPVCCollector := basic.NewPVCCollector(mnma.clientset, mnma.metricsClient, logger,
+				mnma.config.Monitoring.PVCMonitoring.CollectionIntervalSeconds,
+				mnma.config.Monitoring.PVCMonitoring.WarningThresholdPercent,
+				mnma.config.Monitoring.PVCMonitoring.MaxPodsDisplay,
+				mnma.config.Monitoring.PVCMonitoring.RetentionDays)
+
+			usingPods, err := tempPVCCollector.GetPodsUsingPVC(namespace, pvc.Name)
+			if err != nil {
+				logger.Debugf("Could not get pods using PVC %s/%s: %v", namespace, pvc.Name, err)
+			} else {
+				// Limit the number of pods displayed
+				if len(usingPods) > mnma.config.Monitoring.PVCMonitoring.MaxPodsDisplay {
+					usingPods = usingPods[:mnma.config.Monitoring.PVCMonitoring.MaxPodsDisplay]
+				}
+
+				podList := "none"
+				if len(usingPods) > 0 {
+					podList = fmt.Sprintf("%v", usingPods)
+				}
+
+				mnma.writeCriticalEvent(namespace, "pvc", pvc.Name, "PVCNotBound",
+					fmt.Sprintf("Status: %s, Used by: %s", pvc.Status.Phase, podList), logger)
 			}
 		}
 	}

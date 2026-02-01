@@ -25,6 +25,7 @@ type BasicMonitorAgent struct {
 	logger        *logrus.Logger
 	stopCh        chan struct{}
 	memoryCollector *basic.MemoryCollector
+	pvcCollector  *basic.PVCCollector
 }
 
 // NewBasicMonitorAgent creates a new basic monitoring agent
@@ -45,6 +46,32 @@ func NewBasicMonitorAgent(clientset *kubernetes.Clientset, metricsClient *versio
 			retentionDays = 30 // default to 30 days
 		}
 		agent.memoryCollector = basic.NewMemoryCollector(clientset, metricsClient, logger, retentionDays)
+	}
+
+	// Initialize PVC collector if PVC monitoring is enabled
+	if cfg.Monitoring.PVCMonitoring.Enabled {
+		intervalSeconds := cfg.Monitoring.PVCMonitoring.CollectionIntervalSeconds
+		if intervalSeconds <= 0 {
+			intervalSeconds = 300 // default to 5 minutes
+		}
+
+		thresholdPercent := cfg.Monitoring.PVCMonitoring.WarningThresholdPercent
+		if thresholdPercent <= 0 {
+			thresholdPercent = 80 // default to 80%
+		}
+
+		maxPodsDisplay := cfg.Monitoring.PVCMonitoring.MaxPodsDisplay
+		if maxPodsDisplay <= 0 {
+			maxPodsDisplay = 5 // default to 5 pods
+		}
+
+		retentionDays := cfg.Monitoring.PVCMonitoring.RetentionDays
+		if retentionDays <= 0 {
+			retentionDays = 7 // default to 7 days
+		}
+
+		agent.pvcCollector = basic.NewPVCCollector(clientset, metricsClient, logger,
+			intervalSeconds, thresholdPercent, maxPodsDisplay, retentionDays)
 	}
 
 	return agent
@@ -69,6 +96,12 @@ func (bma *BasicMonitorAgent) Start(ctx context.Context) error {
 				if bma.memoryCollector != nil {
 					if err := bma.memoryCollector.CollectMemoryMetrics(bma.namespace); err != nil {
 						bma.logger.Errorf("Error collecting memory metrics: %v", err)
+					}
+				}
+				// Collect PVC metrics if enabled
+				if bma.pvcCollector != nil {
+					if err := bma.pvcCollector.CollectPVCMetrics(bma.namespace); err != nil {
+						bma.logger.Errorf("Error collecting PVC metrics: %v", err)
 					}
 				}
 			case <-bma.stopCh:
@@ -107,6 +140,56 @@ func (bma *BasicMonitorAgent) monitor() error {
 	// Monitor services
 	if err := bma.monitorServices(); err != nil {
 		return fmt.Errorf("error monitoring services: %w", err)
+	}
+
+	return nil
+}
+
+// monitorPVCs monitors the status and usage of PVCs in the namespace
+func (bma *BasicMonitorAgent) monitorPVCs() error {
+	if bma.pvcCollector == nil {
+		return nil // PVC monitoring not enabled
+	}
+
+	pvcs, err := bma.clientset.CoreV1().PersistentVolumeClaims(bma.namespace).List(context.TODO(), metav1.ListOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to list PVCs: %w", err)
+	}
+
+	for _, pvc := range pvcs.Items {
+		// Check if PVC status is problematic (not bound)
+		if pvc.Status.Phase != corev1.ClaimBound {
+			bma.logger.Warnf("CRITICAL EVENT: PVC %s/%s status: %s", bma.namespace, pvc.Name, pvc.Status.Phase)
+			bma.writeCriticalEvent("pvc", pvc.Name, "PVCStatus", string(pvc.Status.Phase))
+		}
+
+		// Get PVC usage info with associated pods
+		usageInfo, err := bma.pvcCollector.GetPVCUsageInfo(bma.namespace, pvc.Name, 1) // Check last day of data
+		if err != nil {
+			bma.logger.Debugf("Could not get usage info for PVC %s/%s: %v", bma.namespace, pvc.Name, err)
+			continue
+		}
+
+		// Check if usage exceeds threshold (in a real implementation, we would have actual usage data)
+		// For now, we'll log if the PVC is not bound or has other issues
+		if usageInfo.Status != "Bound" {
+			bma.logger.Warnf("CRITICAL EVENT: PVC %s/%s is not bound, status: %s", bma.namespace, pvc.Name, usageInfo.Status)
+
+			// Format pod list for logging
+			podList := "none"
+			if len(usageInfo.UsingPods) > 0 {
+				if len(usageInfo.UsingPods) > bma.config.Monitoring.PVCMonitoring.MaxPodsDisplay {
+					podList = fmt.Sprintf("%v (and %d more)",
+						usageInfo.UsingPods[:bma.config.Monitoring.PVCMonitoring.MaxPodsDisplay],
+						len(usageInfo.UsingPods)-bma.config.Monitoring.PVCMonitoring.MaxPodsDisplay)
+				} else {
+					podList = fmt.Sprintf("%v", usageInfo.UsingPods)
+				}
+			}
+
+			bma.writeCriticalEvent("pvc", pvc.Name, "PVCNotBound",
+				fmt.Sprintf("Status: %s, Used by: %s", usageInfo.Status, podList))
+		}
 	}
 
 	return nil
