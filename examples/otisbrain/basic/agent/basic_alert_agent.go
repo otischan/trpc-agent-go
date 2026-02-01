@@ -14,8 +14,8 @@ import (
 	"trpc.group/trpc-go/trpc-agent-go/examples/otisbrain/config"
 )
 
-// BasicAlertAgent handles alert processing
-type BasicAlertAgent struct {
+// BasicEventMonitorAgent handles Kubernetes event monitoring
+type BasicEventMonitorAgent struct {
 	clientset *kubernetes.Clientset
 	namespace string
 	config    *config.Config
@@ -23,9 +23,9 @@ type BasicAlertAgent struct {
 	stopCh    chan struct{}
 }
 
-// NewBasicAlertAgent creates a new basic alert agent
-func NewBasicAlertAgent(clientset *kubernetes.Clientset, namespace string, cfg *config.Config, logger *logrus.Logger) *BasicAlertAgent {
-	return &BasicAlertAgent{
+// NewBasicEventMonitorAgent creates a new basic event monitoring agent
+func NewBasicEventMonitorAgent(clientset *kubernetes.Clientset, namespace string, cfg *config.Config, logger *logrus.Logger) *BasicEventMonitorAgent {
+	return &BasicEventMonitorAgent{
 		clientset: clientset,
 		namespace: namespace,
 		config:    cfg,
@@ -34,41 +34,41 @@ func NewBasicAlertAgent(clientset *kubernetes.Clientset, namespace string, cfg *
 	}
 }
 
-// Start starts the basic alert agent
-func (baa *BasicAlertAgent) Start(ctx context.Context) error {
-	baa.logger.Infof("BasicAlertAgent started for namespace: %s", baa.namespace)
+// Start starts the basic event monitoring agent
+func (bea *BasicEventMonitorAgent) Start(ctx context.Context) error {
+	bea.logger.Infof("BasicEventMonitorAgent started for namespace: %s", bea.namespace)
 
 	// Start watching events in a separate goroutine
 	go func() {
-		err := baa.watchEvents(ctx)
+		err := bea.watchEvents(ctx)
 		if err != nil {
-			baa.logger.Errorf("Error watching events: %v", err)
+			bea.logger.Errorf("Error watching events: %v", err)
 		}
 	}()
 
 	return nil
 }
 
-// Stop stops the basic alert agent
-func (baa *BasicAlertAgent) Stop() {
-	close(baa.stopCh)
+// Stop stops the basic event monitoring agent
+func (bea *BasicEventMonitorAgent) Stop() {
+	close(bea.stopCh)
 }
 
 // watchEvents watches for Kubernetes events and processes them
-func (baa *BasicAlertAgent) watchEvents(ctx context.Context) error {
-	watcher, err := baa.clientset.CoreV1().Events(baa.namespace).Watch(context.TODO(), metav1.ListOptions{})
+func (bea *BasicEventMonitorAgent) watchEvents(ctx context.Context) error {
+	watcher, err := bea.clientset.CoreV1().Events(bea.namespace).Watch(context.TODO(), metav1.ListOptions{})
 	if err != nil {
 		return fmt.Errorf("failed to create event watcher: %w", err)
 	}
 	defer watcher.Stop()
 
-	baa.logger.Infof("Started watching events for namespace: %s", baa.namespace)
+	bea.logger.Infof("Started watching events for namespace: %s", bea.namespace)
 
 	for {
 		select {
 		case event := <-watcher.ResultChan():
 			if event.Type == watch.Error {
-				baa.logger.Errorf("Error watching events: %v", event.Object)
+				bea.logger.Errorf("Error watching events: %v", event.Object)
 				continue
 			}
 
@@ -78,44 +78,44 @@ func (baa *BasicAlertAgent) watchEvents(ctx context.Context) error {
 
 			switch obj := event.Object.(type) {
 			case *corev1.Event:
-				baa.processEvent(obj)
+				bea.processEvent(obj)
 			}
-		case <-baa.stopCh:
-			baa.logger.Info("BasicAlertAgent stopped")
+		case <-bea.stopCh:
+			bea.logger.Info("BasicEventMonitorAgent stopped")
 			return nil
 		case <-ctx.Done():
-			baa.logger.Info("Context cancelled, stopping BasicAlertAgent")
+			bea.logger.Info("Context cancelled, stopping BasicEventMonitorAgent")
 			return nil
 		}
 	}
 }
 
 // processEvent processes a Kubernetes event
-func (baa *BasicAlertAgent) processEvent(event *corev1.Event) {
+func (bea *BasicEventMonitorAgent) processEvent(event *corev1.Event) {
 	// Determine severity based on event type and reason
-	severity := baa.determineSeverity(event)
+	severity := bea.determineSeverity(event)
 
 	// Ignore normal operations
 	if severity == "IGNORE" {
 		return
 	}
 
-	baa.logger.Debugf("Processing event: %s/%s - Reason: %s, Message: %s",
+	bea.logger.Debugf("Processing event: %s/%s - Reason: %s, Message: %s",
 		event.Namespace, event.Name, event.Reason, event.Message)
 
 	// Log the event with severity
-	baa.logger.Infof("[%s] Event: %s/%s - Reason: %s, Message: %s",
+	bea.logger.Infof("[%s] Event: %s/%s - Reason: %s, Message: %s",
 		severity, event.InvolvedObject.Namespace, event.InvolvedObject.Name,
 		event.Reason, event.Message)
 
 	// Write critical events to dedicated log file
 	if severity == "CRITICAL" || severity == "ERROR" {
-		baa.writeCriticalEvent(&event.InvolvedObject, event.Reason, event.Message)
+		bea.writeCriticalEvent(&event.InvolvedObject, event.Reason, event.Message)
 	}
 }
 
 // determineSeverity determines the severity of an event
-func (baa *BasicAlertAgent) determineSeverity(event *corev1.Event) string {
+func (bea *BasicEventMonitorAgent) determineSeverity(event *corev1.Event) string {
 	// Define severity mapping based on event reason
 	// Only consider abnormal events as critical/error, ignore normal operations
 	switch event.Reason {
@@ -134,12 +134,12 @@ func (baa *BasicAlertAgent) determineSeverity(event *corev1.Event) string {
 }
 
 // writeCriticalEvent writes critical events to a dedicated log file
-func (baa *BasicAlertAgent) writeCriticalEvent(obj *corev1.ObjectReference, eventType, message string) {
-	baa.logger.Errorf("CRITICAL_EVENT_LOG - Object: %s/%s (%s), Event: %s, Message: %s",
+func (bea *BasicEventMonitorAgent) writeCriticalEvent(obj *corev1.ObjectReference, eventType, message string) {
+	bea.logger.Errorf("CRITICAL_EVENT_LOG - Object: %s/%s (%s), Event: %s, Message: %s",
 		obj.Namespace, obj.Name, obj.Kind, eventType, message)
 
 	// Write in format suitable for aggregation
-	baa.logger.WithFields(logrus.Fields{
+	bea.logger.WithFields(logrus.Fields{
 		"namespace": obj.Namespace,
 		"objType":   obj.Kind,
 		"objName":   obj.Name,

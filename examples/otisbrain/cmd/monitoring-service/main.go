@@ -181,20 +181,20 @@ func main() {
 		}()
 	}
 
-	// Initialize and run basic alert agent if enabled (in background with file-only logger)
+	// Initialize and run basic event monitoring agent if enabled (in background with file-only logger)
 	if cfg.Monitoring.EnableMonitorEvents {
 		// Start in a separate goroutine to avoid logging interfering with chat
 		go func() {
-			// Use the first namespace from the list for alerts
-			alertNamespace := cfg.Monitoring.Namespaces[0]
+			// Use the first namespace from the list for events
+			eventNamespace := cfg.Monitoring.Namespaces[0]
 			if len(cfg.Monitoring.Namespaces) == 0 {
 				// Fallback to default namespace if none specified
-				alertNamespace = "default"
+				eventNamespace = "default"
 			}
 
-			alertAgent := basicagent.NewBasicAlertAgent(clientset, alertNamespace, cfg, fileLogger.Logger)
-			if err := alertAgent.Start(ctx); err != nil {
-				consoleLogger.Errorf("Error starting basic alert agent: %v", err)
+			eventAgent := basicagent.NewBasicEventMonitorAgent(clientset, eventNamespace, cfg, fileLogger.Logger)
+			if err := eventAgent.Start(ctx); err != nil {
+				consoleLogger.Errorf("Error starting basic event monitoring agent: %v", err)
 			}
 		}()
 	}
