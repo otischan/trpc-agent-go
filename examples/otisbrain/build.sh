@@ -2,7 +2,7 @@
 
 # 构建脚本用于编译 otisbrain 项目的各个服务
 
-set -e  # 遌输任何命令失败时退出
+set -e  # 遍历任何命令失败时退出
 
 # 创建目标目录
 TARGET_DIR="target"
@@ -22,6 +22,27 @@ echo "构建 monitoring-service..."
 cd cmd/monitoring-service
 go build -o ../../"$TARGET_DIR"/monitoring-service .
 echo "monitoring-service 构建完成"
+cd ../..
+
+# 构建 rule-engine-service
+echo "构建 rule-engine-service..."
+cd cmd/rule-engine-service
+go build -o ../../"$TARGET_DIR"/rule-engine-service .
+echo "rule-engine-service 构建完成"
+cd ../..
+
+# 构建 ai-decision-service
+echo "构建 ai-decision-service..."
+cd cmd/ai-decision-service
+go build -o ../../"$TARGET_DIR"/ai-decision-service .
+echo "ai-decision-service 构建完成"
+cd ../..
+
+# 构建 mcp-service
+echo "构建 mcp-service..."
+cd cmd/mcp-service
+go build -o ../../"$TARGET_DIR"/mcp-service .
+echo "mcp-service 构建完成"
 cd ../..
 
 echo "所有服务构建完成！"
