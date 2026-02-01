@@ -112,13 +112,11 @@ type PVCMonitoringConfig struct {
 type Monitoring struct {
 	EnableMonitorResources bool `yaml:"enable_monitor_resources"`
 	EnableMonitorEvents    bool `yaml:"enable_monitor_events"`
-	EnableMonitorPVC       bool `yaml:"enable_monitor_pvc"`            // 是否启用PVC监控
 	Namespaces          []string `yaml:"namespaces"`          // Multiple namespaces for monitoring
 	Kubeconfig          string   `yaml:"kubeconfig"`
 	MetricsPort         int      `yaml:"metrics_port"`
 	AggregationInterval int      `yaml:"aggregation_interval_minutes"` // Interval for aggregating logs in minutes
 	MemoryMonitoring    MemoryMonitoringConfig `yaml:"memory_monitoring"` // Memory monitoring configuration
-	PVCMonitoring       PVCMonitoringConfig `yaml:"pvc_monitoring"`      // PVC monitoring configuration
 }
 
 // Validate validates the configuration parameters
@@ -164,21 +162,6 @@ func (c *Config) Validate() error {
 			}
 		}
 
-		// Validate PVC monitoring configuration
-		if c.Monitoring.PVCMonitoring.Enabled {
-			if c.Monitoring.PVCMonitoring.CollectionIntervalSeconds <= 0 {
-				return fmt.Errorf("PVC monitoring collection interval must be positive, got: %d", c.Monitoring.PVCMonitoring.CollectionIntervalSeconds)
-			}
-			if c.Monitoring.PVCMonitoring.WarningThresholdPercent <= 0 || c.Monitoring.PVCMonitoring.WarningThresholdPercent > 100 {
-				return fmt.Errorf("PVC monitoring warning threshold must be between 1 and 100, got: %d", c.Monitoring.PVCMonitoring.WarningThresholdPercent)
-			}
-			if c.Monitoring.PVCMonitoring.MaxPodsDisplay <= 0 {
-				return fmt.Errorf("PVC monitoring max pods display must be positive, got: %d", c.Monitoring.PVCMonitoring.MaxPodsDisplay)
-			}
-			if c.Monitoring.PVCMonitoring.RetentionDays <= 0 {
-				return fmt.Errorf("PVC monitoring retention days must be positive, got: %d", c.Monitoring.PVCMonitoring.RetentionDays)
-			}
-		}
 	}
 
 	// Validate rule engine configuration
@@ -295,13 +278,6 @@ func getDefaultConfig() *Config {
 					MaxHistoryDays: 30,
 					MinDataPoints:  10,
 				},
-			},
-			PVCMonitoring: PVCMonitoringConfig{
-				Enabled:                 true,
-				CollectionIntervalSeconds: 300, // 默认5分钟
-				WarningThresholdPercent:   80,  // 默认80%
-				MaxPodsDisplay:            5,   // 默认最多显示5个Pod
-				RetentionDays:             7,   // 默认保留7天
 			},
 		},
 		RuleEngine: RuleEngine{

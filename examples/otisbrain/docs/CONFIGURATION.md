@@ -32,7 +32,6 @@ basic:                             # 基础监控配置
 monitoring:                        # 监控代理配置
   enable_monitor_resources: true   # 是否启用K8S资源监控代理
   enable_monitor_events: true      # 是否启用K8S事件监控代理
-  enable_monitor_pvc: true         # 是否启用PVC监控
   namespaces: ["default", "kube-system", "monitoring"] # 监控的命名空间列表 (支持多个命名空间)
   kubeconfig: ""                   # K8S集群认证配置文件路径
   metrics_port: 8080               # 暴露指标的端口
@@ -45,12 +44,6 @@ monitoring:                        # 监控代理配置
       enabled: true                # 是否启用OOM后内存分析
       max_history_days: 30         # OOM分析的最大历史数据天数
       min_data_points: 10          # 最小数据点数量（确保分析可靠性）
-  pvc_monitoring:                  # PVC监控配置
-    enabled: true                  # 是否启用PVC监控
-    collection_interval_seconds: 300 # 数据采集间隔（秒）
-    warning_threshold_percent: 80   # 警告阈值（百分比）
-    max_pods_display: 5            # 显示使用的Pod最大数量
-    retention_days: 7              # 数据保留天数
 ```
 
 **多命名空间监控说明**：

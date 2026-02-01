@@ -34,7 +34,6 @@ monitoring:
   kubeconfig: ""
   metrics_port: 8080
   aggregation_interval_minutes: 10
-  enable_monitor_pvc: true         # 是否启用PVC监控
   memory_monitoring:               # 内存监控配置
     basic_collection:              # 基础内存采集配置
       enabled: true                # 是否启用基础内存指标采集（启用即采集内存使用量）
@@ -43,12 +42,6 @@ monitoring:
       enabled: true                # 是否启用OOM后内存分析
       max_history_days: 30         # OOM分析的最大历史数据天数
       min_data_points: 10          # 最小数据点数量（确保分析可靠性）
-  pvc_monitoring:                  # PVC监控配置
-    enabled: true                  # 是否启用PVC监控
-    collection_interval_seconds: 300 # 数据采集间隔（秒）
-    warning_threshold_percent: 80   # 警告阈值（百分比）
-    max_pods_display: 5            # 显示使用的Pod最大数量
-    retention_days: 7              # 数据保留天数
 
 rule_engine:
   enable_rule_engine: false
