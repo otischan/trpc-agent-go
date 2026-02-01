@@ -14,6 +14,7 @@ import (
 	"github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/metrics/pkg/client/clientset/versioned"
 	basicagent "trpc.group/trpc-go/trpc-agent-go/examples/otisbrain/basic/agent"
 	"trpc.group/trpc-go/trpc-agent-go/examples/otisbrain/basic"
 	"trpc.group/trpc-go/trpc-agent-go/examples/otisbrain/config"
@@ -127,6 +128,16 @@ func main() {
 		log.Fatalf("Failed to create Kubernetes client: %v", err)
 	}
 
+	// Create metrics client for memory metrics
+	config, err := k8sclient.GetConfig(cfg.Monitoring.Kubeconfig)
+	if err != nil {
+		log.Fatalf("Failed to get config: %v", err)
+	}
+	metricsClient, err := versioned.NewForConfig(config)
+	if err != nil {
+		log.Fatalf("Failed to create metrics client: %v", err)
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -159,21 +170,21 @@ func main() {
 			if len(namespaces) == 1 && namespaces[0] == "all" {
 				// Special case: monitor all namespaces
 				consoleLogger.Info("Monitoring all namespaces")
-				monitorAgent := basicagent.NewMultiNamespaceMonitorAgent(clientset, getAllNamespaces(clientset), cfg, fileLogger.Logger)
+				monitorAgent := basicagent.NewMultiNamespaceMonitorAgent(clientset, metricsClient, getAllNamespaces(clientset), cfg, fileLogger.Logger)
 				if err := monitorAgent.Start(ctx); err != nil {
 					consoleLogger.Errorf("Error starting multi-namespace monitoring agent: %v", err)
 				}
 			} else if len(namespaces) > 1 {
 				// Multiple namespaces specified
 				consoleLogger.Infof("Monitoring multiple namespaces: %v", namespaces)
-				monitorAgent := basicagent.NewMultiNamespaceMonitorAgent(clientset, namespaces, cfg, fileLogger.Logger)
+				monitorAgent := basicagent.NewMultiNamespaceMonitorAgent(clientset, metricsClient, namespaces, cfg, fileLogger.Logger)
 				if err := monitorAgent.Start(ctx); err != nil {
 					consoleLogger.Errorf("Error starting multi-namespace monitoring agent: %v", err)
 				}
 			} else {
 				// Single namespace - use the original agent for backward compatibility
 				consoleLogger.Infof("Monitoring single namespace: %s", namespaces[0])
-				monitorAgent := basicagent.NewBasicMonitorAgent(clientset, namespaces[0], cfg, fileLogger.Logger)
+				monitorAgent := basicagent.NewBasicMonitorAgent(clientset, metricsClient, namespaces[0], cfg, fileLogger.Logger)
 				if err := monitorAgent.Start(ctx); err != nil {
 					consoleLogger.Errorf("Error starting basic monitoring agent: %v", err)
 				}
@@ -192,7 +203,7 @@ func main() {
 				eventNamespace = "default"
 			}
 
-			eventAgent := basicagent.NewBasicEventMonitorAgent(clientset, eventNamespace, cfg, fileLogger.Logger)
+			eventAgent := basicagent.NewBasicEventMonitorAgent(clientset, metricsClient, eventNamespace, cfg, fileLogger.Logger)
 			if err := eventAgent.Start(ctx); err != nil {
 				consoleLogger.Errorf("Error starting basic event monitoring agent: %v", err)
 			}

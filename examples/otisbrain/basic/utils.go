@@ -16,3 +16,13 @@ func ExtractNamespaceFromPath(filePath string) string {
 	}
 	return "default" // fallback to default namespace
 }
+
+// CreateDirectory creates a directory if it doesn't exist
+func CreateDirectory(path string) error {
+	return os.MkdirAll(path, 0755)
+}
+
+// WriteFile writes content to a file
+func WriteFile(filename, content string) error {
+	return os.WriteFile(filename, []byte(content), 0644)
+}

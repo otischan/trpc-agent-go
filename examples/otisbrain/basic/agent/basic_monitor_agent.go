@@ -10,28 +10,44 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/metrics/pkg/client/clientset/versioned"
 
 	"trpc.group/trpc-go/trpc-agent-go/examples/otisbrain/config"
+	"trpc.group/trpc-go/trpc-agent-go/examples/otisbrain/basic"
 )
 
 // BasicMonitorAgent implements the basic monitoring functionality
 type BasicMonitorAgent struct {
-	clientset *kubernetes.Clientset
-	namespace string
-	config    *config.Config
-	logger    *logrus.Logger
-	stopCh    chan struct{}
+	clientset     *kubernetes.Clientset
+	metricsClient *versioned.Clientset
+	namespace     string
+	config        *config.Config
+	logger        *logrus.Logger
+	stopCh        chan struct{}
+	memoryCollector *basic.MemoryCollector
 }
 
 // NewBasicMonitorAgent creates a new basic monitoring agent
-func NewBasicMonitorAgent(clientset *kubernetes.Clientset, namespace string, cfg *config.Config, logger *logrus.Logger) *BasicMonitorAgent {
-	return &BasicMonitorAgent{
-		clientset: clientset,
-		namespace: namespace,
-		config:    cfg,
-		logger:    logger,
-		stopCh:    make(chan struct{}),
+func NewBasicMonitorAgent(clientset *kubernetes.Clientset, metricsClient *versioned.Clientset, namespace string, cfg *config.Config, logger *logrus.Logger) *BasicMonitorAgent {
+	agent := &BasicMonitorAgent{
+		clientset:     clientset,
+		metricsClient: metricsClient,
+		namespace:     namespace,
+		config:        cfg,
+		logger:        logger,
+		stopCh:        make(chan struct{}),
 	}
+
+	// Initialize memory collector if memory monitoring is enabled
+	if cfg.Monitoring.MemoryMonitoring.BasicCollection.Enabled {
+		retentionDays := cfg.Monitoring.MemoryMonitoring.BasicCollection.RetentionDays
+		if retentionDays <= 0 {
+			retentionDays = 30 // default to 30 days
+		}
+		agent.memoryCollector = basic.NewMemoryCollector(clientset, metricsClient, logger, retentionDays)
+	}
+
+	return agent
 }
 
 // Start starts the basic monitoring agent
@@ -48,6 +64,12 @@ func (bma *BasicMonitorAgent) Start(ctx context.Context) error {
 			case <-ticker.C:
 				if err := bma.monitor(); err != nil {
 					bma.logger.Errorf("Error during monitoring: %v", err)
+				}
+				// Collect memory metrics if enabled
+				if bma.memoryCollector != nil {
+					if err := bma.memoryCollector.CollectMemoryMetrics(bma.namespace); err != nil {
+						bma.logger.Errorf("Error collecting memory metrics: %v", err)
+					}
 				}
 			case <-bma.stopCh:
 				bma.logger.Info("BasicMonitorAgent stopped")

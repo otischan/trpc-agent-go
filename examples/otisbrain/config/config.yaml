@@ -34,6 +34,14 @@ monitoring:
   kubeconfig: ""
   metrics_port: 8080
   aggregation_interval_minutes: 10
+  memory_monitoring:               # 内存监控配置
+    basic_collection:              # 基础内存采集配置
+      enabled: true                # 是否启用基础内存指标采集（启用即采集内存使用量）
+      retention_days: 30           # 内存指标保留天数（用于OOM后分析）
+    oom_analysis:                  # OOM事件分析配置
+      enabled: true                # 是否启用OOM后内存分析
+      max_history_days: 30         # OOM分析的最大历史数据天数
+      min_data_points: 10          # 最小数据点数量（确保分析可靠性）
 
 rule_engine:
   enable_rule_engine: false

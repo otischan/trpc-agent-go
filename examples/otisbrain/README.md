@@ -353,6 +353,12 @@ logs/
 - Service可用性
 - 存储卷状态
 
+#### 内存监控增强
+- **基础内存采集**: 持续采集内存使用量，用于OOM后分析
+- **OOM事件检测**: 监控K8S事件中的OOMKilled事件
+- **OOM后内存分析**: 当发生OOM时，分析该Pod的历史内存使用模式，计算内存使用的整体趋势斜率
+- **内存使用轮廓**: 提供OOM前的内存使用斜率信息，帮助判断是否存在内存泄露趋势
+
 #### 应用健康
 - 应用响应时间
 - 错误率
@@ -512,6 +518,14 @@ monitoring:                        # 监控代理配置
   kubeconfig: ""                   # K8S集群认证配置文件路径
   metrics_port: 8080               # 暴露指标的端口
   aggregation_interval_minutes: 10 # 日志聚合间隔（分钟），即每10分钟对关键事件进行一次汇总
+  memory_monitoring:               # 内存监控配置
+    basic_collection:              # 基础内存采集配置
+      enabled: true                # 是否启用基础内存指标采集（启用即采集内存使用量）
+      retention_days: 30           # 内存指标保留天数（用于OOM后分析）
+    oom_analysis:                  # OOM事件分析配置
+      enabled: true                # 是否启用OOM后内存分析
+      max_history_days: 30         # OOM分析的最大历史数据天数
+      min_data_points: 10          # 最小数据点数量（确保分析可靠性）
 ```
 
 **多命名空间监控说明**：
@@ -706,6 +720,32 @@ make build-all
 - **目的**: 为AI增强能力的agent提供简洁的异常数据，便于读取和分析
 - **格式**: 输出简短的异常数据汇总，包含关键事件、Pod状态等信息
 
+### OOM事件内存分析机制
+
+当检测到OOMKilled事件时，系统会自动执行内存使用分析：
+
+- **触发条件**: 检测到K8S事件中的OOMKilled事件
+- **分析内容**: 从历史数据中提取该Pod的内存使用记录，计算内存使用的整体趋势斜率
+- **输出位置**: 分析结果记录到 `logs/critical_record/memory_analysis_*.txt`
+- **目的**: 提供OOM前的内存使用模式，帮助判断是否存在内存泄露趋势
+- **输出示例**:
+  ```
+  # OOM事件内存分析报告
+  Pod: my-app-7d5b8c9c4-xl2v9
+  Namespace: default
+  OOM时间: 2024-01-15T10:30:00Z
+
+  # 内存使用趋势分析
+  内存使用斜率: +2.5 MB/小时
+  分析时间范围: OOM前30天
+  数据点数量: 1440 (每小时1个点)
+
+  # 分析结论
+  - 内存在过去30天内呈缓慢增长趋势
+  - 平均每小时增长2.5MB
+  - 建议检查是否存在内存泄露
+  ```
+
 ### 技能系统架构
 
 系统采用标准化的技能组织结构，每个技能都是一个独立的文件夹，包含定义文件和脚本文件：
@@ -765,3 +805,84 @@ skills/
 - 技能通过通用的 shell 命令执行机制运行，实现与代码的完全解耦
 - 支持 `shell_command` 和 `function_call` 两种执行类型
 - 通过 `list skills` 命令可动态查看可用技能列表
+
+### RBAC权限配置
+
+为了使OtisBrain监控服务正常运行，需要为其配置适当的RBAC权限。以下是所需权限的详细说明：
+
+#### 1. 监控服务所需RBAC权限
+
+```yaml
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: otisbrain-monitor-sa
+  namespace: monitoring  # 根据实际部署命名空间调整
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: otisbrain-monitor-cr
+rules:
+# Pod相关权限
+- apiGroups: [""]
+  resources: ["pods", "pods/status", "pods/log"]
+  verbs: ["get", "list", "watch"]
+# Deployment相关权限
+- apiGroups: ["apps"]
+  resources: ["deployments", "deployments/status"]
+  verbs: ["get", "list", "watch"]
+# Service相关权限
+- apiGroups: [""]
+  resources: ["services", "services/status"]
+  verbs: ["get", "list", "watch"]
+# 事件相关权限
+- apiGroups: [""]
+  resources: ["events"]
+  verbs: ["get", "list", "watch"]
+# 节点相关权限
+- apiGroups: [""]
+  resources: ["nodes", "nodes/status", "nodes/proxy"]
+  verbs: ["get", "list", "watch"]
+# PersistentVolumeClaim相关权限
+- apiGroups: [""]
+  resources: ["persistentvolumeclaims"]
+  verbs: ["get", "list", "watch"]
+# Namespace相关权限
+- apiGroups: [""]
+  resources: ["namespaces"]
+  verbs: ["get", "list", "watch"]
+# PodMetrics相关权限（用于内存监控）
+- apiGroups: ["metrics.k8s.io"]
+  resources: ["pods"]
+  verbs: ["get", "list"]
+# NodeMetrics相关权限（用于内存监控）
+- apiGroups: ["metrics.k8s.io"]
+  resources: ["nodes"]
+  verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: otisbrain-monitor-crb
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: otisbrain-monitor-cr
+subjects:
+- kind: ServiceAccount
+  name: otisbrain-monitor-sa
+  namespace: monitoring  # 根据实际部署命名空间调整
+```
+
+#### 2. 权限说明
+
+- **Pod权限**: 监控Pod状态、资源使用情况和日志
+- **Deployment权限**: 监控Deployment状态和副本数
+- **Service权限**: 监控Service可用性
+- **事件权限**: 监控K8S事件流，捕获异常事件
+- **节点权限**: 监控节点状态和资源使用
+- **PVC权限**: 监控持久卷声明状态
+- **Namespace权限**: 监控命名空间状态
+- **Metrics权限**: 获取Pod和节点的指标数据（用于内存监控）

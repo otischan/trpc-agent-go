@@ -10,10 +10,10 @@ import (
 	"k8s.io/client-go/util/homedir"
 )
 
-// NewClient creates a new Kubernetes client
-func NewClient(kubeconfigPath string) (*kubernetes.Clientset, error) {
+// GetConfig returns a Kubernetes REST config
+func GetConfig(kubeconfigPath string) (*rest.Config, error) {
 	var kubeconfig *string
-	
+
 	if kubeconfigPath != "" {
 		kubeconfig = &kubeconfigPath
 	} else {
@@ -32,6 +32,16 @@ func NewClient(kubeconfigPath string) (*kubernetes.Clientset, error) {
 		if err != nil {
 			return nil, err
 		}
+	}
+
+	return config, nil
+}
+
+// NewClient creates a new Kubernetes client
+func NewClient(kubeconfigPath string) (*kubernetes.Clientset, error) {
+	config, err := GetConfig(kubeconfigPath)
+	if err != nil {
+		return nil, err
 	}
 
 	clientset, err := kubernetes.NewForConfig(config)

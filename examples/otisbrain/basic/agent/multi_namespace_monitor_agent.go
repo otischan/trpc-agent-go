@@ -12,6 +12,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/metrics/pkg/client/clientset/versioned"
 
 	"trpc.group/trpc-go/trpc-agent-go/examples/otisbrain/config"
 	"trpc.group/trpc-go/trpc-agent-go/examples/otisbrain/basic"
@@ -19,22 +20,24 @@ import (
 
 // MultiNamespaceMonitorAgent implements monitoring across multiple namespaces
 type MultiNamespaceMonitorAgent struct {
-	clientset *kubernetes.Clientset
-	namespaces []string
-	config    *config.Config
-	logger    *logrus.Logger
-	stopCh    chan struct{}
-	wg        sync.WaitGroup
+	clientset     *kubernetes.Clientset
+	metricsClient *versioned.Clientset
+	namespaces    []string
+	config        *config.Config
+	logger        *logrus.Logger
+	stopCh        chan struct{}
+	wg            sync.WaitGroup
 }
 
 // NewMultiNamespaceMonitorAgent creates a new multi-namespace monitoring agent
-func NewMultiNamespaceMonitorAgent(clientset *kubernetes.Clientset, namespaces []string, cfg *config.Config, logger *logrus.Logger) *MultiNamespaceMonitorAgent {
+func NewMultiNamespaceMonitorAgent(clientset *kubernetes.Clientset, metricsClient *versioned.Clientset, namespaces []string, cfg *config.Config, logger *logrus.Logger) *MultiNamespaceMonitorAgent {
 	return &MultiNamespaceMonitorAgent{
-		clientset: clientset,
-		namespaces: namespaces,
-		config:    cfg,
-		logger:    logger,
-		stopCh:    make(chan struct{}),
+		clientset:     clientset,
+		metricsClient: metricsClient,
+		namespaces:    namespaces,
+		config:        cfg,
+		logger:        logger,
+		stopCh:        make(chan struct{}),
 	}
 }
 
@@ -71,6 +74,14 @@ func (mnma *MultiNamespaceMonitorAgent) startNamespaceMonitoring(ctx context.Con
 			case <-ticker.C:
 				if err := mnma.monitorNamespace(namespace, nsLogger); err != nil {
 					nsLogger.Errorf("Error during monitoring namespace %s: %v", namespace, err)
+				}
+				// Collect memory metrics if enabled
+				if mnma.config.Monitoring.MemoryMonitoring.BasicCollection.Enabled {
+					memoryCollector := basic.NewMemoryCollector(mnma.clientset, mnma.metricsClient, nsLogger,
+						mnma.config.Monitoring.MemoryMonitoring.BasicCollection.RetentionDays)
+					if err := memoryCollector.CollectMemoryMetrics(namespace); err != nil {
+						nsLogger.Errorf("Error collecting memory metrics for namespace %s: %v", namespace, err)
+					}
 				}
 			case <-mnma.stopCh:
 				nsLogger.Info("MultiNamespaceMonitorAgent stopped for namespace: ", namespace)

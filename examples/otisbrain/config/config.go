@@ -86,6 +86,19 @@ type Basic struct {
 	DryRun          bool `yaml:"dry_run"`
 }
 
+// MemoryMonitoringConfig holds memory monitoring-specific configurations
+type MemoryMonitoringConfig struct {
+	BasicCollection struct {
+		Enabled      bool `yaml:"enabled"`
+		RetentionDays int `yaml:"retention_days"`
+	} `yaml:"basic_collection"`
+	OOMAnalysis struct {
+		Enabled        bool `yaml:"enabled"`
+		MaxHistoryDays int `yaml:"max_history_days"`
+		MinDataPoints  int `yaml:"min_data_points"`
+	} `yaml:"oom_analysis"`
+}
+
 // Monitoring holds monitoring-specific configurations
 type Monitoring struct {
 	EnableMonitorResources bool `yaml:"enable_monitor_resources"`
@@ -94,6 +107,7 @@ type Monitoring struct {
 	Kubeconfig          string   `yaml:"kubeconfig"`
 	MetricsPort         int      `yaml:"metrics_port"`
 	AggregationInterval int      `yaml:"aggregation_interval_minutes"` // Interval for aggregating logs in minutes
+	MemoryMonitoring    MemoryMonitoringConfig `yaml:"memory_monitoring"` // Memory monitoring configuration
 }
 
 // Validate validates the configuration parameters
@@ -121,6 +135,22 @@ func (c *Config) Validate() error {
 	if c.Monitoring.EnableMonitorResources || c.Monitoring.EnableMonitorEvents { // Only validate if monitoring or alerting is enabled
 		if c.Monitoring.AggregationInterval <= 0 {
 			return fmt.Errorf("monitoring aggregation interval must be positive, got: %d", c.Monitoring.AggregationInterval)
+		}
+
+		// Validate memory monitoring configuration
+		if c.Monitoring.MemoryMonitoring.BasicCollection.Enabled {
+			if c.Monitoring.MemoryMonitoring.BasicCollection.RetentionDays <= 0 {
+				return fmt.Errorf("memory monitoring retention days must be positive, got: %d", c.Monitoring.MemoryMonitoring.BasicCollection.RetentionDays)
+			}
+		}
+
+		if c.Monitoring.MemoryMonitoring.OOMAnalysis.Enabled {
+			if c.Monitoring.MemoryMonitoring.OOMAnalysis.MaxHistoryDays <= 0 {
+				return fmt.Errorf("OOM analysis max history days must be positive, got: %d", c.Monitoring.MemoryMonitoring.OOMAnalysis.MaxHistoryDays)
+			}
+			if c.Monitoring.MemoryMonitoring.OOMAnalysis.MinDataPoints <= 0 {
+				return fmt.Errorf("OOM analysis min data points must be positive, got: %d", c.Monitoring.MemoryMonitoring.OOMAnalysis.MinDataPoints)
+			}
 		}
 	}
 
@@ -221,6 +251,24 @@ func getDefaultConfig() *Config {
 			Kubeconfig:          "",
 			MetricsPort:         8080,
 			AggregationInterval: 10, // Default to 10 minutes
+			MemoryMonitoring: MemoryMonitoringConfig{
+				BasicCollection: struct {
+					Enabled      bool `yaml:"enabled"`
+					RetentionDays int `yaml:"retention_days"`
+				}{
+					Enabled:      true,
+					RetentionDays: 30,
+				},
+				OOMAnalysis: struct {
+					Enabled        bool `yaml:"enabled"`
+					MaxHistoryDays int `yaml:"max_history_days"`
+					MinDataPoints  int `yaml:"min_data_points"`
+				}{
+					Enabled:        true,
+					MaxHistoryDays: 30,
+					MinDataPoints:  10,
+				},
+			},
 		},
 		RuleEngine: RuleEngine{
 			EnableRuleEngine:      true,

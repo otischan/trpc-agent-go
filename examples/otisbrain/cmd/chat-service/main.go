@@ -124,7 +124,7 @@ func main() {
 		// Clear any previous output and present clean chat interface
 		fmt.Print("\n\x1b[2J\x1b[H") // ANSI escape codes to clear screen
 		fmt.Println("🚀 OtisBrain AI Chat Service Started!")
-		fmt.Println("Type your questions below. Type '/exit' to quit.\n")
+		fmt.Println("Type your questions below. Type '/exit' to quit.")
 
 		// Create the interactive chat instance with console logger
 		aiChat := chat.NewAIChat(cfg, &basic.BasicLogger{Logger: consoleLogger})
