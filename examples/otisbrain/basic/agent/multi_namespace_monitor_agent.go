@@ -27,11 +27,12 @@ type MultiNamespaceMonitorAgent struct {
 	logger        *logrus.Logger
 	stopCh        chan struct{}
 	wg            sync.WaitGroup
+	pvcCollector  *basic.PVCCollector
 }
 
 // NewMultiNamespaceMonitorAgent creates a new multi-namespace monitoring agent
 func NewMultiNamespaceMonitorAgent(clientset *kubernetes.Clientset, metricsClient *versioned.Clientset, namespaces []string, cfg *config.Config, logger *logrus.Logger) *MultiNamespaceMonitorAgent {
-	return &MultiNamespaceMonitorAgent{
+	agent := &MultiNamespaceMonitorAgent{
 		clientset:     clientset,
 		metricsClient: metricsClient,
 		namespaces:    namespaces,
@@ -39,6 +40,34 @@ func NewMultiNamespaceMonitorAgent(clientset *kubernetes.Clientset, metricsClien
 		logger:        logger,
 		stopCh:        make(chan struct{}),
 	}
+
+	// Initialize PVC collector if PVC monitoring is enabled
+	if cfg.Monitoring.PVCMonitoring.Enabled {
+		intervalSeconds := cfg.Monitoring.PVCMonitoring.CollectionIntervalSeconds
+		if intervalSeconds <= 0 {
+			intervalSeconds = 300 // default to 5 minutes
+		}
+
+		thresholdPercent := cfg.Monitoring.PVCMonitoring.WarningThresholdPercent
+		if thresholdPercent <= 0 {
+			thresholdPercent = 80 // default to 80%
+		}
+
+		maxPodsDisplay := cfg.Monitoring.PVCMonitoring.MaxPodsDisplay
+		if maxPodsDisplay <= 0 {
+			maxPodsDisplay = 5 // default to 5 pods
+		}
+
+		retentionDays := cfg.Monitoring.PVCMonitoring.RetentionDays
+		if retentionDays <= 0 {
+			retentionDays = 7 // default to 7 days
+		}
+
+		agent.pvcCollector = basic.NewPVCCollector(clientset, metricsClient, logger,
+			intervalSeconds, thresholdPercent, maxPodsDisplay, retentionDays)
+	}
+
+	return agent
 }
 
 // Start starts the multi-namespace monitoring agent
@@ -282,30 +311,40 @@ func (mnma *MultiNamespaceMonitorAgent) monitorPVCs(namespace string, logger *lo
 		if pvc.Status.Phase != corev1.ClaimBound {
 			logger.Warnf("CRITICAL EVENT: PVC %s/%s is not bound, status: %s", namespace, pvc.Name, pvc.Status.Phase)
 
-			// Create a temporary PVC collector to find pods using this PVC
-			tempPVCCollector := basic.NewPVCCollector(mnma.clientset, mnma.metricsClient, logger,
-				mnma.config.Monitoring.PVCMonitoring.CollectionIntervalSeconds,
-				mnma.config.Monitoring.PVCMonitoring.WarningThresholdPercent,
-				mnma.config.Monitoring.PVCMonitoring.MaxPodsDisplay,
-				mnma.config.Monitoring.PVCMonitoring.RetentionDays)
+			// Use the agent's PVC collector to find pods using this PVC
+			var usingPods []string
+			var err error
 
-			usingPods, err := tempPVCCollector.GetPodsUsingPVC(namespace, pvc.Name)
-			if err != nil {
-				logger.Debugf("Could not get pods using PVC %s/%s: %v", namespace, pvc.Name, err)
+			if mnma.pvcCollector != nil {
+				usingPods, err = mnma.pvcCollector.GetPodsUsingPVC(namespace, pvc.Name)
+				if err != nil {
+					logger.Debugf("Could not get pods using PVC %s/%s: %v", namespace, pvc.Name, err)
+				}
 			} else {
-				// Limit the number of pods displayed
-				if len(usingPods) > mnma.config.Monitoring.PVCMonitoring.MaxPodsDisplay {
-					usingPods = usingPods[:mnma.config.Monitoring.PVCMonitoring.MaxPodsDisplay]
+				// Fallback to direct method if collector not initialized
+				fallbackCollector := basic.NewPVCCollector(mnma.clientset, mnma.metricsClient, logger,
+					mnma.config.Monitoring.PVCMonitoring.CollectionIntervalSeconds,
+					mnma.config.Monitoring.PVCMonitoring.WarningThresholdPercent,
+					mnma.config.Monitoring.PVCMonitoring.MaxPodsDisplay,
+					mnma.config.Monitoring.PVCMonitoring.RetentionDays)
+				usingPods, err = fallbackCollector.GetPodsUsingPVC(namespace, pvc.Name)
+				if err != nil {
+					logger.Debugf("Could not get pods using PVC %s/%s: %v", namespace, pvc.Name, err)
 				}
-
-				podList := "none"
-				if len(usingPods) > 0 {
-					podList = fmt.Sprintf("%v", usingPods)
-				}
-
-				mnma.writeCriticalEvent(namespace, "pvc", pvc.Name, "PVCNotBound",
-					fmt.Sprintf("Status: %s, Used by: %s", pvc.Status.Phase, podList), logger)
 			}
+
+			// Limit the number of pods displayed
+			if len(usingPods) > mnma.config.Monitoring.PVCMonitoring.MaxPodsDisplay {
+				usingPods = usingPods[:mnma.config.Monitoring.PVCMonitoring.MaxPodsDisplay]
+			}
+
+			podList := "none"
+			if len(usingPods) > 0 {
+				podList = fmt.Sprintf("%v", usingPods)
+			}
+
+			mnma.writeCriticalEvent(namespace, "pvc", pvc.Name, "PVCNotBound",
+				fmt.Sprintf("Status: %s, Used by: %s", pvc.Status.Phase, podList), logger)
 		}
 	}
 
