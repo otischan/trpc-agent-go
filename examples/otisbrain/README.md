@@ -23,10 +23,11 @@ namespace: default                 # 监控的目标命名空间 (已弃用，�
 kubeconfig: ""                     # K8S集群认证配置文件路径
 
 llm:                               # 大语言模型配置（仅用于AI增强功能）
-  model: gpt-4o-mini               # 使用的AI模型
-  api_key: ""                      # AI模型API密钥
-  base_url: ""                     # AI模型API基础URL
-  enabled: false                   # 是否启用AI功能
+  model: qwen-plus                 # 使用的AI模型 (如 gpt-4o-mini, qwen-plus, etc.)
+  api_key: ""                      # AI模型API密钥 (对于Qwen，将使用DASHSCOPE_API_KEY环境变量)
+  base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"  # AI模型API基础URL
+  enabled: true                    # 是否启用AI功能
+  variant: "qwen"                  # 模型变体 (openai, qwen, deepseek, hunyuan)
 
 rules:                             # 规则引擎配置
   alert_rules_file: "./rules/alert_rules.yaml"       # 告警规则文件路径
@@ -85,6 +86,25 @@ go build -o mcp-service .
 # 或者使用构建脚本
 ./build.sh
 ```
+
+### 配置 Qwen 模型
+
+要使用阿里云的 Qwen 模型，您需要：
+
+1. 在阿里云控制台获取 DashScope API 密钥
+2. 设置环境变量：
+   ```bash
+   export DASHSCOPE_API_KEY="your-api-key-here"
+   ```
+3. 确保 config/config.yaml 中的 LLM 配置如下：
+   ```yaml
+   llm:
+     model: qwen-plus                 # 使用的Qwen模型
+     api_key: ""                      # 将使用DASHSCOPE_API_KEY环境变量
+     base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
+     enabled: true
+     variant: "qwen"                  # 指定为Qwen变体
+   ```
 
 ## 文档目录
 

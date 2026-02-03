@@ -45,10 +45,14 @@ type AIChat struct {
 
 // NewAIChat creates a new AI chat instance
 func NewAIChat(cfg *config.Config, logger *basic.BasicLogger) *AIChat {
+	variant := cfg.LLM.Variant
+	if variant == "" {
+		variant = "openai" // Default to openai variant if not specified
+	}
 	return &AIChat{
 		modelName: cfg.LLM.Model,
 		streaming: true, // Always use streaming for better UX
-		variant:   "openai", // Default to openai variant
+		variant:   variant,
 		config:    cfg,
 		logger:    logger,
 	}

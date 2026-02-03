@@ -29,6 +29,7 @@ type LLM struct {
 	APIKey    string `yaml:"api_key"`
 	BaseURL   string `yaml:"base_url"`
 	Enabled   bool   `yaml:"enabled"`
+	Variant   string `yaml:"variant"`
 }
 
 // MCPServer holds individual MCP server configuration

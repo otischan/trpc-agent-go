@@ -4,10 +4,11 @@ namespace: default
 kubeconfig: ""
 
 llm:
-  model: gpt-4o-mini
+  model: qwen-plus
   api_key: ""
-  base_url: ""
+  base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
   enabled: true
+  variant: "qwen"
 
 mcp:
   servers:
