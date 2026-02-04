@@ -1,7 +1,6 @@
 package k8sclient
 
 import (
-	"flag"
 	"path/filepath"
 
 	"k8s.io/client-go/kubernetes"
@@ -18,9 +17,11 @@ func GetConfig(kubeconfigPath string) (*rest.Config, error) {
 		kubeconfig = &kubeconfigPath
 	} else {
 		if home := homedir.HomeDir(); home != "" {
-			kubeconfig = flag.String("kubeconfig", filepath.Join(home, ".kube", "config"), "(optional) absolute path to the kubeconfig file")
+			defaultPath := filepath.Join(home, ".kube", "config")
+			kubeconfig = &defaultPath
 		} else {
-			kubeconfig = flag.String("kubeconfig", "", "absolute path to the kubeconfig file")
+			defaultPath := ""
+			kubeconfig = &defaultPath
 		}
 	}
 

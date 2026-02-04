@@ -1,0 +1,73 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: shell-oom-test-final
+  labels:
+    app: shell-oom-test-final
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: shell-oom-test-final
+  template:
+    metadata:
+      labels:
+        app: shell-oom-test-final
+    spec:
+      containers:
+      - name: shell-oom-container
+        image: registry.cn-hangzhou.aliyuncs.com/acs/centos:8
+        command: ['sh', '-c']
+        args:
+        - |
+          echo "Starting shell-based memory exhaustion test..."
+          echo "Container memory limit is 64MB, attempting to exceed this limit."
+          
+          # Create a large temporary file to consume memory
+          # We'll use dd to create a large file in memory via tmpfs
+          # This should trigger OOM when memory limit is exceeded
+          
+          # Method 1: Use memory-intensive shell operations
+          # Create a large variable that consumes memory
+          counter=0
+          memory_block=""
+          
+          # Create a function that allocates memory in a loop
+          allocate_memory() {
+            # Create a large string to consume memory
+            local size=${1:-1048576}  # Default to ~1MB
+            local str=$(printf '0%.0s' $(seq 1 $size))
+            echo $str
+          }
+          
+          # Loop to continuously allocate memory
+          while [ $counter -lt 100 ]; do
+            # Each iteration tries to allocate ~2MB of memory
+            memory_block="$memory_block$(allocate_memory 2097152)"
+            counter=$((counter + 1))
+            echo "Iteration $counter: Attempting to allocate memory"
+            
+            # Check memory usage if possible
+            if [ -f /sys/fs/cgroup/memory/memory.usage_in_bytes ]; then
+              usage=$(cat /sys/fs/cgroup/memory/memory.usage_in_bytes)
+              limit=$(cat /sys/fs/cgroup/memory/memory.limit_in_bytes)
+              usage_mb=$((usage / 1024 / 1024))
+              limit_mb=$((limit / 1024 / 1024))
+              echo "Memory usage: ${usage_mb}MB / ${limit_mb}MB"
+              
+              # If we're close to the limit, we might trigger OOM soon
+              if [ $usage -gt $((limit * 80 / 100)) ]; then
+                echo "Close to memory limit, continuing to stress..."
+              fi
+            fi
+            
+            # Small delay to allow memory pressure to build
+            sleep 1
+          done
+        resources:
+          requests:
+            memory: "32Mi"
+            cpu: "50m"
+          limits:
+            memory: "64Mi"  # 设置较低的内存限制以触发OOM
+            cpu: "100m"

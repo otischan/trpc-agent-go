@@ -1,0 +1,63 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: stress-oom-test
+  labels:
+    app: stress-oom-test
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: stress-oom-test
+  template:
+    metadata:
+      labels:
+        app: stress-oom-test
+    spec:
+      containers:
+      - name: stress-oom-container
+        image: registry.cn-hangzhou.aliyuncs.com/acs/centos:8
+        command: ['sh', '-c']
+        args:
+        - |
+          # Install stress tool if available, otherwise use shell methods
+          echo "Starting stress test to trigger OOM..."
+          
+          # Try to install stress tool
+          if command -v yum >/dev/null 2>&1; then
+            yum install -y epel-release 2>/dev/null || echo "Could not install epel-release"
+            yum install -y stress 2>/dev/null || echo "Could not install stress, using shell method"
+          fi
+          
+          # If stress is available, use it to create memory pressure
+          if command -v stress >/dev/null 2>&1; then
+            echo "Using stress tool to create memory pressure"
+            stress --vm 1 --vm-bytes 100M --vm-keep -t 60s
+          else
+            echo "Stress tool not available, using shell method to consume memory"
+            # Alternative: Use shell to consume memory
+            # Create a large file in /dev/shm (RAM-based filesystem)
+            if [ -d "/dev/shm" ]; then
+              echo "Creating large file in /dev/shm to consume memory"
+              # Create a file larger than the memory limit (64MB)
+              dd if=/dev/zero of=/dev/shm/largefile bs=1M count=100 2>/dev/null || echo "dd command completed (likely due to OOM)"
+            else
+              echo "No /dev/shm available, using memory allocation loop"
+              # Memory allocation loop
+              counter=0
+              while [ $counter -lt 100 ]; do
+                # Use seq and other tools to create memory pressure
+                data=$(seq 1 1000000 | tr '\n' ' ')
+                eval "array_$counter=( $data )"
+                counter=$((counter + 1))
+                echo "Created array $counter"
+              done
+            fi
+          fi
+        resources:
+          requests:
+            memory: "32Mi"
+            cpu: "50m"
+          limits:
+            memory: "64Mi"  # 设置较低的内存限制以触发OOM
+            cpu: "100m"

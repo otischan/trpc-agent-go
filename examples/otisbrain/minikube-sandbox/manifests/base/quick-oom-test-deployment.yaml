@@ -1,0 +1,41 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: quick-oom-test
+  labels:
+    app: quick-oom-test
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: quick-oom-test
+  template:
+    metadata:
+      labels:
+        app: quick-oom-test
+    spec:
+      containers:
+      - name: quick-oom-container
+        image: registry.cn-hangzhou.aliyuncs.com/acs/centos:8
+        command: ['sh', '-c']
+        args:
+        - |
+          echo "Attempting to allocate memory beyond limit..."
+          # 立即尝试分配超过限制的内存，快速触发OOM
+          python3 -c "
+          import time
+          data = []
+          print('Starting rapid memory allocation...')
+          while True:
+              # 分配大量内存块，快速耗尽分配的内存
+              data.append(' ' * (10 * 1024 * 1024))  # 10MB per allocation
+              print(f'Allocated {(len(data) * 10)} MB')
+              time.sleep(0.1)
+          "
+        resources:
+          requests:
+            memory: "32Mi"
+            cpu: "50m"
+          limits:
+            memory: "64Mi"  # 设置非常低的限制以快速触发OOM
+            cpu: "100m"

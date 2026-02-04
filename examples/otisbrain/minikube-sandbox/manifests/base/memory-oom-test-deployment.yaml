@@ -1,0 +1,76 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: memory-oom-test
+  labels:
+    app: memory-oom-test
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: memory-oom-test
+  template:
+    metadata:
+      labels:
+        app: memory-oom-test
+    spec:
+      containers:
+      - name: memory-oom-container
+        image: registry.cn-hangzhou.aliyuncs.com/acs/centos:8
+        command: ['sh', '-c']
+        args:
+        - |
+          # 创建一个简单的内存泄漏脚本，逐步消耗内存直到达到限制
+          echo "Starting memory consumption test..."
+          
+          # 创建一个大的数组来消耗内存
+          counter=0
+          declare -a memory_hog
+          
+          # 每秒增加内存使用，直到达到内存限制
+          while true; do
+            # 每次循环增加内存使用
+            memory_hog[$counter]=$(dd if=/dev/zero bs=1M count=5 2>/dev/null)
+            counter=$((counter + 1))
+            
+            # 输出当前内存使用情况
+            if [ $((counter % 10)) -eq 0 ]; then
+              echo "Allocated memory blocks: $counter (approximately $((counter * 5)) MB)"
+              
+              # 检查当前进程的内存使用
+              if [ -f /sys/fs/cgroup/memory/memory.usage_in_bytes ]; then
+                current_mem=$(cat /sys/fs/cgroup/memory/memory.usage_in_bytes)
+                limit_mem=$(cat /sys/fs/cgroup/memory/memory.limit_in_bytes)
+                echo "Current memory usage: $(($current_mem / 1024 / 1024)) MB / Limit: $(($limit_mem / 1024 / 1024)) MB"
+                
+                # 如果接近内存限制，输出警告
+                if [ $current_mem -gt $((limit_mem * 80 / 100)) ]; then
+                  echo "WARNING: Approaching memory limit!"
+                fi
+              fi
+            fi
+            
+            sleep 1
+          done
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "100m"
+          limits:
+            memory: "128Mi"  # 设置较低的内存限制以快速触发OOM
+            cpu: "200m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: memory-oom-test-service
+  labels:
+    app: memory-oom-test
+spec:
+  selector:
+    app: memory-oom-test
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 80
+  type: ClusterIP
