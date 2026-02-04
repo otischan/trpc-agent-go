@@ -89,6 +89,8 @@ type Basic struct {
 
 // MemoryMonitoringConfig holds memory monitoring-specific configurations
 type MemoryMonitoringConfig struct {
+	Enabled         bool `yaml:"enabled"`  // Whether to enable memory monitoring overall
+	IntervalSeconds int  `yaml:"interval_seconds"`  // Memory metrics collection interval
 	BasicCollection struct {
 		Enabled      bool `yaml:"enabled"`
 		RetentionDays int `yaml:"retention_days"`
@@ -148,18 +150,24 @@ func (c *Config) Validate() error {
 		}
 
 		// Validate memory monitoring configuration
-		if c.Monitoring.MemoryMonitoring.BasicCollection.Enabled {
-			if c.Monitoring.MemoryMonitoring.BasicCollection.RetentionDays <= 0 {
-				return fmt.Errorf("memory monitoring retention days must be positive, got: %d", c.Monitoring.MemoryMonitoring.BasicCollection.RetentionDays)
+		if c.Monitoring.MemoryMonitoring.Enabled {
+			if c.Monitoring.MemoryMonitoring.IntervalSeconds <= 0 {
+				return fmt.Errorf("memory monitoring interval seconds must be positive, got: %d", c.Monitoring.MemoryMonitoring.IntervalSeconds)
 			}
-		}
 
-		if c.Monitoring.MemoryMonitoring.OOMAnalysis.Enabled {
-			if c.Monitoring.MemoryMonitoring.OOMAnalysis.MaxHistoryDays <= 0 {
-				return fmt.Errorf("OOM analysis max history days must be positive, got: %d", c.Monitoring.MemoryMonitoring.OOMAnalysis.MaxHistoryDays)
+			if c.Monitoring.MemoryMonitoring.BasicCollection.Enabled {
+				if c.Monitoring.MemoryMonitoring.BasicCollection.RetentionDays <= 0 {
+					return fmt.Errorf("memory monitoring retention days must be positive, got: %d", c.Monitoring.MemoryMonitoring.BasicCollection.RetentionDays)
+				}
 			}
-			if c.Monitoring.MemoryMonitoring.OOMAnalysis.MinDataPoints <= 0 {
-				return fmt.Errorf("OOM analysis min data points must be positive, got: %d", c.Monitoring.MemoryMonitoring.OOMAnalysis.MinDataPoints)
+
+			if c.Monitoring.MemoryMonitoring.OOMAnalysis.Enabled {
+				if c.Monitoring.MemoryMonitoring.OOMAnalysis.MaxHistoryDays <= 0 {
+					return fmt.Errorf("OOM analysis max history days must be positive, got: %d", c.Monitoring.MemoryMonitoring.OOMAnalysis.MaxHistoryDays)
+				}
+				if c.Monitoring.MemoryMonitoring.OOMAnalysis.MinDataPoints <= 0 {
+					return fmt.Errorf("OOM analysis min data points must be positive, got: %d", c.Monitoring.MemoryMonitoring.OOMAnalysis.MinDataPoints)
+				}
 			}
 		}
 
@@ -263,6 +271,8 @@ func getDefaultConfig() *Config {
 			MetricsPort:         8080,
 			AggregationInterval: 10, // Default to 10 minutes
 			MemoryMonitoring: MemoryMonitoringConfig{
+				Enabled:         true,
+				IntervalSeconds: 30, // Default to 30 seconds
 				BasicCollection: struct {
 					Enabled      bool `yaml:"enabled"`
 					RetentionDays int `yaml:"retention_days"`

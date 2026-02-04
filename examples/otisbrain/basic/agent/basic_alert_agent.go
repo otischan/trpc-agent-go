@@ -13,7 +13,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/metrics/pkg/client/clientset/versioned"
+	metricsv "k8s.io/metrics/pkg/client/clientset/versioned"
 
 	"trpc.group/trpc-go/trpc-agent-go/examples/otisbrain/config"
 	"trpc.group/trpc-go/trpc-agent-go/examples/otisbrain/basic"
@@ -22,7 +22,7 @@ import (
 // BasicEventMonitorAgent handles Kubernetes event monitoring
 type BasicEventMonitorAgent struct {
 	clientset     *kubernetes.Clientset
-	metricsClient *versioned.Clientset
+	metricsClient *metricsv.Clientset
 	namespace     string
 	config        *config.Config
 	logger        *logrus.Logger
@@ -31,7 +31,7 @@ type BasicEventMonitorAgent struct {
 }
 
 // NewBasicEventMonitorAgent creates a new basic event monitoring agent
-func NewBasicEventMonitorAgent(clientset *kubernetes.Clientset, metricsClient *versioned.Clientset, namespace string, cfg *config.Config, logger *logrus.Logger) *BasicEventMonitorAgent {
+func NewBasicEventMonitorAgent(clientset *kubernetes.Clientset, metricsClient *metricsv.Clientset, namespace string, cfg *config.Config, logger *logrus.Logger) *BasicEventMonitorAgent {
 	agent := &BasicEventMonitorAgent{
 		clientset:     clientset,
 		metricsClient: metricsClient,
@@ -42,7 +42,7 @@ func NewBasicEventMonitorAgent(clientset *kubernetes.Clientset, metricsClient *v
 	}
 
 	// Initialize memory collector if memory monitoring is enabled
-	if cfg.Monitoring.MemoryMonitoring.BasicCollection.Enabled {
+	if cfg.Monitoring.MemoryMonitoring.Enabled && cfg.Monitoring.MemoryMonitoring.BasicCollection.Enabled {
 		retentionDays := cfg.Monitoring.MemoryMonitoring.BasicCollection.RetentionDays
 		if retentionDays <= 0 {
 			retentionDays = 30 // default to 30 days
@@ -104,9 +104,23 @@ func (bea *BasicEventMonitorAgent) collectMemoryMetrics() error {
 
 // watchEvents watches for Kubernetes events and processes them
 func (bea *BasicEventMonitorAgent) watchEvents(ctx context.Context) error {
-	watcher, err := bea.clientset.CoreV1().Events(bea.namespace).Watch(context.TODO(), metav1.ListOptions{})
+	// Use a more robust way to create the watcher with proper error handling
+	var watcher watch.Interface
+	var err error
+
+	// Retry mechanism for creating the watcher
+	for i := 0; i < 3; i++ {
+		watcher, err = bea.clientset.CoreV1().Events(bea.namespace).Watch(context.TODO(), metav1.ListOptions{})
+		if err == nil {
+			break
+		}
+
+		bea.logger.Errorf("Attempt %d to create event watcher failed: %v", i+1, err)
+		time.Sleep(time.Duration(i+1) * time.Second)
+	}
+
 	if err != nil {
-		return fmt.Errorf("failed to create event watcher: %w", err)
+		return fmt.Errorf("failed to create event watcher after retries: %w", err)
 	}
 	defer watcher.Stop()
 
@@ -130,6 +144,7 @@ func (bea *BasicEventMonitorAgent) watchEvents(ctx context.Context) error {
 
 				// Check if this is an OOMKilled event and perform memory analysis if enabled
 				if obj.Reason == "OOMKilled" && bea.config.Monitoring.MemoryMonitoring.OOMAnalysis.Enabled {
+					bea.logger.Infof("Detected OOMKilled event: %s/%s - %s", obj.Namespace, obj.InvolvedObject.Name, obj.Message)
 					bea.handleOOMEvent(obj)
 				}
 			}
@@ -159,6 +174,8 @@ func (bea *BasicEventMonitorAgent) handleOOMEvent(event *corev1.Event) {
 	// Find the container that was killed (usually in the message)
 	containerName := bea.extractContainerNameFromMessage(event.Message)
 
+	bea.logger.Infof("Analyzing memory for OOM event - Pod: %s, Container: %s", podName, containerName)
+
 	// Perform memory analysis
 	maxHistoryDays := bea.config.Monitoring.MemoryMonitoring.OOMAnalysis.MaxHistoryDays
 	if maxHistoryDays <= 0 {
@@ -173,10 +190,12 @@ func (bea *BasicEventMonitorAgent) handleOOMEvent(event *corev1.Event) {
 	slope, err := bea.memoryCollector.AnalyzeMemoryOnOOM(podName, namespace, containerName, maxHistoryDays)
 	if err != nil {
 		bea.logger.Errorf("Error analyzing memory for OOM event: %v", err)
+		// Even if analysis fails, still record the OOM event
+		bea.recordOOMEventOnly(podName, namespace, containerName, event.Message)
 		return
 	}
 
-	// Record the analysis result to critical record
+	// Record the analysis result
 	bea.recordOOMMemoryAnalysis(podName, namespace, containerName, slope, maxHistoryDays)
 }
 
@@ -192,6 +211,7 @@ func (bea *BasicEventMonitorAgent) extractContainerNameFromMessage(message strin
 	}
 	// If we can't extract from message, return empty string
 	// The memory collector will analyze all containers in the pod
+	bea.logger.Debugf("Could not extract container name from message: %s", message)
 	return ""
 }
 
@@ -208,8 +228,8 @@ func (bea *BasicEventMonitorAgent) recordOOMMemoryAnalysis(podName, namespace, c
 	report := bea.formatOOMMemoryAnalysisReport(podName, namespace, containerName, slope, maxHistoryDays)
 
 	// Write the report to a file
-	filename := filepath.Join(criticalRecordPath, fmt.Sprintf("memory_analysis_%s_%s_%s.txt",
-		namespace, podName, time.Now().Format("20060102_150405")))
+	filename := filepath.Join(criticalRecordPath, fmt.Sprintf("memory_analysis_%s_%s_%s_%s.txt",
+		namespace, podName, containerName, time.Now().Format("20060102_150405")))
 
 	if err := bea.writeFile(filename, report); err != nil {
 		bea.logger.Errorf("Failed to write OOM memory analysis report: %v", err)
@@ -217,6 +237,38 @@ func (bea *BasicEventMonitorAgent) recordOOMMemoryAnalysis(podName, namespace, c
 	}
 
 	bea.logger.Infof("OOM memory analysis report written to: %s", filename)
+}
+
+// recordOOMEventOnly records just the OOM event when analysis fails
+func (bea *BasicEventMonitorAgent) recordOOMEventOnly(podName, namespace, containerName, message string) {
+	// Create critical_record directory if it doesn't exist
+	criticalRecordPath := "logs/critical_record"
+	if err := bea.createDirectory(criticalRecordPath); err != nil {
+		bea.logger.Errorf("Failed to create critical_record directory: %v", err)
+		return
+	}
+
+	report := fmt.Sprintf(`# OOM事件记录
+Pod: %s
+Namespace: %s
+Container: %s
+时间: %s
+消息: %s
+
+# 注意
+内存分析失败，但事件已记录
+`, podName, namespace, containerName, time.Now().Format(time.RFC3339), message)
+
+	// Write the report to a file
+	filename := filepath.Join(criticalRecordPath, fmt.Sprintf("oom_event_only_%s_%s_%s_%s.txt",
+		namespace, podName, containerName, time.Now().Format("20060102_150405")))
+
+	if err := bea.writeFile(filename, report); err != nil {
+		bea.logger.Errorf("Failed to write OOM event record: %v", err)
+		return
+	}
+
+	bea.logger.Infof("OOM event record written to: %s", filename)
 }
 
 // formatOOMMemoryAnalysisReport formats the OOM memory analysis report
@@ -234,11 +286,11 @@ func (bea *BasicEventMonitorAgent) formatOOMMemoryAnalysisReport(podName, namesp
 
 	var analysisConclusion string
 	if slope > 0 {
-		analysisConclusion = fmt.Sprintf("- 内存在过去%d天内总体呈增长趋势\n- 平均每小时增长%.2fMB", maxHistoryDays, slope)
+		analysisConclusion = fmt.Sprintf("- 内存在过去%d天内总体呈增长趋势\n- 平均每数据点增长%.2fMB", maxHistoryDays, slope)
 	} else if slope < 0 {
-		analysisConclusion = fmt.Sprintf("- 内存在过去%d天内总体呈下降趋势\n- 平均每小时减少%.2fMB", maxHistoryDays, -slope)
+		analysisConclusion = fmt.Sprintf("- 内存在过去%d天内总体呈下降趋势\n- 平均每数据点减少%.2fMB", maxHistoryDays, -slope)
 	} else {
-		analysisConclusion = fmt.Sprintf("- 内存在过去%d天内总体保持稳定\n- 平均每小时变化%.2fMB", maxHistoryDays, slope)
+		analysisConclusion = fmt.Sprintf("- 内存在过去%d天内总体保持稳定\n- 平均每数据点变化%.2fMB", maxHistoryDays, slope)
 	}
 
 	return fmt.Sprintf(`# OOM事件内存分析报告
@@ -248,7 +300,7 @@ Container: %s
 OOM时间: %s
 
 # 内存使用趋势分析
-内存使用斜率: %.2f MB/小时
+内存使用斜率: %.2f MB/数据点
 分析时间范围: 过去%d天
 数据点数量: %d (从 %s 到 %s)
 

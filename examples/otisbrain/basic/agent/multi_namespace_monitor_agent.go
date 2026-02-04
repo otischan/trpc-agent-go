@@ -76,11 +76,13 @@ func (mnma *MultiNamespaceMonitorAgent) startNamespaceMonitoring(ctx context.Con
 					nsLogger.Errorf("Error during monitoring namespace %s: %v", namespace, err)
 				}
 				// Collect memory metrics if enabled
-				if mnma.config.Monitoring.MemoryMonitoring.BasicCollection.Enabled {
+				if mnma.config.Monitoring.MemoryMonitoring.Enabled && mnma.config.Monitoring.MemoryMonitoring.BasicCollection.Enabled {
 					memoryCollector := basic.NewMemoryCollector(mnma.clientset, mnma.metricsClient, nsLogger,
 						mnma.config.Monitoring.MemoryMonitoring.BasicCollection.RetentionDays)
 					if err := memoryCollector.CollectMemoryMetrics(namespace); err != nil {
 						nsLogger.Errorf("Error collecting memory metrics for namespace %s: %v", namespace, err)
+					} else {
+						nsLogger.Debugf("Successfully collected memory metrics for namespace %s", namespace)
 					}
 				}
 

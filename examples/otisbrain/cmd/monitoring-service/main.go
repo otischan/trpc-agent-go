@@ -187,6 +187,8 @@ func main() {
 				monitorAgent := basicagent.NewBasicMonitorAgent(clientset, metricsClient, namespaces[0], cfg, fileLogger.Logger)
 				if err := monitorAgent.Start(ctx); err != nil {
 					consoleLogger.Errorf("Error starting basic monitoring agent: %v", err)
+				} else {
+					consoleLogger.Infof("Successfully started basic monitoring agent for namespace: %s", namespaces[0])
 				}
 			}
 		}()
