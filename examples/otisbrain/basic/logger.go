@@ -186,8 +186,8 @@ func (bl *BasicLogger) WriteCriticalEvent(objType, objName, eventType, message s
 				"event":   eventType,
 				"message": message,
 			},
-			Level: logrus.ErrorLevel,
-			Time:  time.Now(),
+			Level:   logrus.ErrorLevel,
+			Time:    time.Now(),
 			Message: "CRITICAL_EVENT_LOG",
 		}
 
@@ -225,7 +225,6 @@ func (bl *BasicLogger) WriteCriticalEventForAggregation(objType, objName, eventT
 	}
 }
 
-
 // GetBasicLogPath returns the path to basic logs
 func (bl *BasicLogger) GetBasicLogPath() string {
 	return bl.basicLogPath
@@ -238,7 +237,7 @@ func (bl *BasicLogger) GetLogFiles(pattern string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Filter out directories
 	var logFiles []string
 	for _, file := range files {
@@ -250,7 +249,7 @@ func (bl *BasicLogger) GetLogFiles(pattern string) ([]string, error) {
 			logFiles = append(logFiles, file)
 		}
 	}
-	
+
 	return logFiles, nil
 }
 

@@ -286,7 +286,6 @@ func (la *LogAggregator) parseFileForCriticalEvents(filePath string, startTime, 
 	return events, nil
 }
 
-
 // parseLogrusLine parses a logrus-formatted log line
 func parseLogrusLine(line, defaultNamespace string) (CriticalEvent, error) {
 	event := CriticalEvent{
@@ -392,7 +391,7 @@ func (la *LogAggregator) deduplicateEvents(events []CriticalEvent) []CriticalEve
 	for _, event := range events {
 		// Create a unique key for deduplication
 		key := fmt.Sprintf("%s:%s:%s:%s", event.Type, event.Name, event.Event, event.Message)
-		
+
 		if !seen[key] {
 			seen[key] = true
 			deduplicated = append(deduplicated, event)
