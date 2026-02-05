@@ -3,6 +3,8 @@ package agent
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -248,4 +250,32 @@ func (bma *BasicMonitorAgent) writeCriticalEvent(objType, objName, eventType, me
 		"eventType": eventType,
 		"message":   message,
 	}).Error("CRITICAL_EVENT")
+	
+	// Write critical event to dedicated file in the logger's path
+	// Since we're passing the logger from BasicLogger.Logger, we need to handle critical events properly
+	// Create a more direct approach by using the namespace to write to the correct path
+	logPath := filepath.Join("logs", "basic", bma.namespace)
+	criticalLogPath := filepath.Join(logPath, "critical_events.log")
+	
+	criticalLogFile, err := os.OpenFile(criticalLogPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+	if err == nil {
+		defer criticalLogFile.Close()
+
+		// Create a log entry with the desired fields and message
+		entry := &logrus.Entry{
+			Logger: bma.logger,
+			Data: logrus.Fields{
+				"type":    objType,
+				"name":    objName,
+				"event":   eventType,
+				"message": message,
+			},
+			Level: logrus.ErrorLevel,
+			Time:  time.Now(),
+			Message: "CRITICAL_EVENT_LOG",
+		}
+
+		serialized, _ := bma.logger.Formatter.Format(entry)
+		criticalLogFile.Write(serialized)
+	}
 }

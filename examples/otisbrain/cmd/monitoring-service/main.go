@@ -184,7 +184,16 @@ func main() {
 			} else {
 				// Single namespace - use the original agent for backward compatibility
 				consoleLogger.Infof("Monitoring single namespace: %s", namespaces[0])
-				monitorAgent := basicagent.NewBasicMonitorAgent(clientset, metricsClient, namespaces[0], cfg, fileLogger.Logger)
+				
+				// Create a namespace-specific logger for this agent
+				nsLogger, err := basic.NewBasicLoggerWithNamespace(cfg.LogLevel, namespaces[0])
+				if err != nil {
+					consoleLogger.Errorf("Failed to create namespace-specific logger for %s: %v", namespaces[0], err)
+					// fallback to using the global file logger
+					nsLogger = fileLogger
+				}
+				
+				monitorAgent := basicagent.NewBasicMonitorAgent(clientset, metricsClient, namespaces[0], cfg, nsLogger.Logger)
 				if err := monitorAgent.Start(ctx); err != nil {
 					consoleLogger.Errorf("Error starting basic monitoring agent: %v", err)
 				} else {
@@ -205,7 +214,15 @@ func main() {
 				eventNamespace = "default"
 			}
 
-			eventAgent := basicagent.NewBasicEventMonitorAgent(clientset, metricsClient, eventNamespace, cfg, fileLogger.Logger)
+			// Create a namespace-specific logger for this agent
+			nsLogger, err := basic.NewBasicLoggerWithNamespace(cfg.LogLevel, eventNamespace)
+			if err != nil {
+				consoleLogger.Errorf("Failed to create namespace-specific logger for %s: %v", eventNamespace, err)
+				// fallback to using the global file logger
+				nsLogger = fileLogger
+			}
+
+			eventAgent := basicagent.NewBasicEventMonitorAgent(clientset, metricsClient, eventNamespace, cfg, nsLogger.Logger)
 			if err := eventAgent.Start(ctx); err != nil {
 				consoleLogger.Errorf("Error starting basic event monitoring agent: %v", err)
 			}

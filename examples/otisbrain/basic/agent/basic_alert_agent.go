@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -376,4 +377,30 @@ func (bea *BasicEventMonitorAgent) writeCriticalEvent(obj *corev1.ObjectReferenc
 		"eventType": eventType,
 		"message":   message,
 	}).Error("CRITICAL_EVENT")
+	
+	// Write critical event to dedicated file in the logger's path
+	logPath := filepath.Join("logs", "basic", obj.Namespace)
+	criticalLogPath := filepath.Join(logPath, "critical_events.log")
+	
+	criticalLogFile, err := os.OpenFile(criticalLogPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+	if err == nil {
+		defer criticalLogFile.Close()
+
+		// Create a log entry with the desired fields and message
+		entry := &logrus.Entry{
+			Logger: bea.logger,
+			Data: logrus.Fields{
+				"type":    obj.Kind,
+				"name":    obj.Name,
+				"event":   eventType,
+				"message": message,
+			},
+			Level: logrus.ErrorLevel,
+			Time:  time.Now(),
+			Message: "CRITICAL_EVENT_LOG",
+		}
+
+		serialized, _ := bea.logger.Formatter.Format(entry)
+		criticalLogFile.Write(serialized)
+	}
 }
