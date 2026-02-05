@@ -17,6 +17,7 @@ import (
 	"sort"
 	"time"
 
+	"trpc.group/trpc-go/trpc-agent-go/ctxmsg"
 	"trpc.group/trpc-go/trpc-agent-go/evaluation/evalresult"
 	"trpc.group/trpc-go/trpc-agent-go/evaluation/evalset"
 	"trpc.group/trpc-go/trpc-agent-go/evaluation/evaluator/registry"
@@ -95,11 +96,12 @@ type agentEvaluator struct {
 
 // EvaluationResult contains the aggregated outcome of running an evaluation across multiple runs.
 type EvaluationResult struct {
-	AppName       string                  `json:"appName"`       // AppName identifies the agent being evaluated.
-	EvalSetID     string                  `json:"evalSetId"`     // EvalSetID identifies the evaluation set used in this run.
-	OverallStatus status.EvalStatus       `json:"overallStatus"` // OverallStatus summarizes the aggregated evaluation status across cases.
-	ExecutionTime time.Duration           `json:"executionTime"` // ExecutionTime records the total latency for the evaluation run.
-	EvalCases     []*EvaluationCaseResult `json:"evalCases"`     // EvalCases contains aggregated results for each evaluation case.
+	AppName       string                    `json:"appName"`       // AppName identifies the agent being evaluated.
+	EvalSetID     string                    `json:"evalSetId"`     // EvalSetID identifies the evaluation set used in this run.
+	OverallStatus status.EvalStatus         `json:"overallStatus"` // OverallStatus summarizes the aggregated evaluation status across cases.
+	ExecutionTime time.Duration             `json:"executionTime"` // ExecutionTime records the total latency for the evaluation run.
+	EvalCases     []*EvaluationCaseResult   `json:"evalCases"`     // EvalCases contains aggregated results for each evaluation case.
+	EvalResult    *evalresult.EvalSetResult `json:"evalSetResult"` // EvalSetResult contains the aggregated results of the evaluation set.
 }
 
 // EvaluationCaseResult aggregates the outcome of a single eval case across multiple runs.
@@ -115,9 +117,11 @@ func (a *agentEvaluator) Evaluate(ctx context.Context, evalSetID string) (*Evalu
 	if evalSetID == "" {
 		return nil, errors.New("eval set id is not configured")
 	}
+	ctx, msg := ctxmsg.WithCloneMessage(ctx)
+	defer ctxmsg.PutBackMessage(msg)
 	start := time.Now()
 	// Gather per-case results.
-	evalCases, err := a.collectCaseResults(ctx, evalSetID)
+	evalCases, evalSetResult, err := a.collectCaseResults(ctx, evalSetID)
 	if err != nil {
 		return nil, fmt.Errorf("collect eval case results: %w", err)
 	}
@@ -132,6 +136,7 @@ func (a *agentEvaluator) Evaluate(ctx context.Context, evalSetID string) (*Evalu
 		OverallStatus: status,
 		ExecutionTime: time.Since(start),
 		EvalCases:     evalCases,
+		EvalResult:    evalSetResult,
 	}, nil
 }
 
@@ -144,13 +149,13 @@ func (a *agentEvaluator) Close() error {
 }
 
 // collectCaseResults runs evaluation on the specified eval set across multiple runs and groups results by case ID.
-func (a *agentEvaluator) collectCaseResults(ctx context.Context, evalSetID string) ([]*EvaluationCaseResult, error) {
+func (a *agentEvaluator) collectCaseResults(ctx context.Context, evalSetID string) ([]*EvaluationCaseResult, *evalresult.EvalSetResult, error) {
 	// Determine eval case ordering from the eval set definition when possible.
 	evalSetIndex := make(map[string]int)
 	if a.evalSetManager != nil {
 		evalSet, err := a.evalSetManager.Get(ctx, a.appName, evalSetID)
 		if err != nil {
-			return nil, fmt.Errorf("get eval set: %w", err)
+			return nil, nil, fmt.Errorf("get eval set: %w", err)
 		}
 		for i, evalCase := range evalSet.EvalCases {
 			evalSetIndex[evalCase.EvalID] = i
@@ -163,7 +168,7 @@ func (a *agentEvaluator) collectCaseResults(ctx context.Context, evalSetID strin
 	// Run evaluation on the specified eval set across multiple inference runs.
 	evalSetResult, err := a.runEvaluation(ctx, evalSetID)
 	if err != nil {
-		return nil, fmt.Errorf("run evaluation: %w", err)
+		return nil, nil, fmt.Errorf("run evaluation: %w", err)
 	}
 	// Group results by case ID.
 	for _, caseResult := range evalSetResult.EvalCaseResults {
@@ -174,7 +179,7 @@ func (a *agentEvaluator) collectCaseResults(ctx context.Context, evalSetID strin
 		// Aggregate multiple runs for a single case.
 		evalCaseResult, err := aggregateCaseRuns(caseID, runs)
 		if err != nil {
-			return nil, fmt.Errorf("aggregate case runs: %w", err)
+			return nil, nil, fmt.Errorf("aggregate case runs: %w", err)
 		}
 		evalCaseResults = append(evalCaseResults, evalCaseResult)
 	}
@@ -189,7 +194,7 @@ func (a *agentEvaluator) collectCaseResults(ctx context.Context, evalSetID strin
 		}
 		return evalCaseResults[i].EvalCaseID < evalCaseResults[j].EvalCaseID
 	})
-	return evalCaseResults, nil
+	return evalCaseResults, evalSetResult, nil
 }
 
 // runEvaluation runs inference and evaluation on the specified eval set.
