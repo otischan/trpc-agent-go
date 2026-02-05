@@ -21,9 +21,6 @@ import (
 // MemoryDataPoint represents a single memory usage data point
 type MemoryDataPoint struct {
 	Timestamp   time.Time
-	PodName     string
-	Namespace   string
-	Container   string
 	MemoryUsage int64 // in bytes
 }
 
@@ -115,9 +112,6 @@ func (mc *MemoryCollector) CollectMemoryMetrics(namespace string) error {
 
 			dataPoint := MemoryDataPoint{
 				Timestamp:   currentTime,
-				PodName:     podMetric.Name,
-				Namespace:   namespace,
-				Container:   container.Name,
 				MemoryUsage: memoryUsage.Value(),
 			}
 
