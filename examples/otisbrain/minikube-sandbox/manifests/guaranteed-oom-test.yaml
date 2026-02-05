@@ -1,0 +1,81 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: slow-oom-test
+  labels:
+    app: slow-oom-test
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: slow-oom-test
+  template:
+    metadata:
+      labels:
+        app: slow-oom-test
+    spec:
+      containers:
+      - name: slow-oom-container
+        image: registry.cn-hangzhou.aliyuncs.com/acs/centos:8
+        command: ['sh', '-c']
+        args:
+        - |
+          # 创建一个保证触发OOM的内存消耗应用
+          echo "Starting guaranteed OOM test..."
+          echo "This will rapidly increase memory usage to trigger OOM"
+
+          # 创建一个函数来快速消耗内存
+          consume_memory_rapidly() {
+            local chunk_size=8388608  # 8MB chunks (increased from 2MB)
+            local sleep_time=1        # Sleep 1 second between allocations (faster)
+
+            echo "Starting rapid memory consumption: ${chunk_size} bytes per iteration"
+
+            # 使用全局数组存储数据，确保内存不会被释放
+            declare -g -a mem_array
+
+            local i=0
+            while true; do
+              # 分配内存并存储在数组中，防止被垃圾回收
+              # 使用base64编码确保数据在内存中保持
+              mem_array[$i]=$(dd if=/dev/zero bs=$chunk_size count=1 2>/dev/null | base64 | head -c $chunk_size)
+
+              # 每5次分配报告一次
+              if [ $((i % 5)) -eq 0 ]; then
+                allocated_mb=$(( (i + 1) * chunk_size / 1024 / 1024 ))
+                echo "Allocated approximately $allocated_mb MB so far"
+
+                # 检查当前内存使用情况
+                if [ -f /sys/fs/cgroup/memory/memory.usage_in_bytes ]; then
+                  current=$(cat /sys/fs/cgroup/memory/memory.usage_in_bytes)
+                  current_mb=$((current / 1024 / 1024))
+                  echo "Current memory usage: ${current_mb}MB"
+
+                  # 如果当前使用量大于限制的80%，输出警告
+                  if [ -f /sys/fs/cgroup/memory/memory.limit_in_bytes ]; then
+                    limit=$(cat /sys/fs/cgroup/memory/memory.limit_in_bytes)
+                    limit_mb=$((limit / 1024 / 1024))
+                    usage_percent=$((current * 100 / limit))
+
+                    if [ $usage_percent -gt 80 ]; then
+                      echo "WARNING: Memory usage at ${usage_percent}% of limit (${current_mb}/${limit_mb}MB)"
+                    fi
+                  fi
+                fi
+
+              fi
+
+              i=$((i + 1))
+              sleep $sleep_time
+            done
+          }
+
+          # 执行内存消耗函数
+          consume_memory_rapidly
+        resources:
+          requests:
+            memory: "16Mi"  # 降低请求内存
+            cpu: "50m"
+          limits:
+            memory: "32Mi"  # 严格限制内存 to guarantee OOM
+            cpu: "100m"
