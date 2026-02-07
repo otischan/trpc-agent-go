@@ -179,15 +179,17 @@ func (la *LogAggregator) getNamespaceLogFilesForAggregation(startTime, endTime t
 			nsLogPath := filepath.Join(logsDir, entry.Name())
 
 			// Look for the aggregation-ready log file in the namespace directory
+			// Prioritize for_aggregation.log as it contains properly formatted events
 			nsAggregationPattern := filepath.Join(nsLogPath, "for_aggregation.log")
 			if _, err := os.Stat(nsAggregationPattern); err == nil {
 				files = append(files, nsAggregationPattern)
-			}
-
-			// Also look for the basic.log file in the namespace directory (for backward compatibility)
-			nsBasicPattern := filepath.Join(nsLogPath, "basic.log")
-			if _, err := os.Stat(nsBasicPattern); err == nil {
-				files = append(files, nsBasicPattern)
+			} else {
+				// Only fall back to basic.log if for_aggregation.log doesn't exist
+				// This avoids double-processing of events
+				nsBasicPattern := filepath.Join(nsLogPath, "basic.log")
+				if _, err := os.Stat(nsBasicPattern); err == nil {
+					files = append(files, nsBasicPattern)
+				}
 			}
 		}
 	}
@@ -232,6 +234,7 @@ func (la *LogAggregator) parseFileForCriticalEvents(filePath string, startTime, 
 		line := scanner.Text()
 
 		// Expected format: CRITICAL|timestamp|namespace|type|name|event|message
+		// This is the primary format for critical events and should be prioritized
 		parts := strings.Split(line, "|")
 		if len(parts) >= 7 {
 			if parts[0] == "CRITICAL" {
@@ -264,16 +267,27 @@ func (la *LogAggregator) parseFileForCriticalEvents(filePath string, startTime, 
 
 				events = append(events, event)
 			}
-		} else {
-			// Handle logrus format logs that might appear in the file
-			// Look for logrus structured logs with namespace field
-			if strings.Contains(line, "CRITICAL_EVENT") || strings.Contains(line, "namespace") {
-				event, err := parseLogrusLine(line, namespace)
-				if err != nil {
+			// Skip processing logrus format if it's a properly formatted CRITICAL line
+			continue
+		}
+
+		// Only process logrus format logs for files that are known to contain them
+		// Skip this for for_aggregation.log files which use the | delimiter format
+		if strings.HasSuffix(filePath, "for_aggregation.log") {
+			continue
+		}
+
+		// Handle logrus format logs that might appear in basic.log files
+		// Only attempt to parse lines that look like they might be critical events
+		if strings.Contains(line, "CRITICAL_EVENT") || strings.Contains(line, "CRITICAL") || strings.Contains(line, "ERROR") {
+			event, err := parseLogrusLine(line, namespace)
+			if err != nil {
+				// Only log warning for lines that appear to be critical events but fail to parse
+				if strings.Contains(line, "CRITICAL_EVENT") {
 					la.logger.Warnf("Failed to parse logrus line in file %s at line %d: %v", filePath, lineNum, err)
-				} else if !event.Timestamp.Before(startTime) && !event.Timestamp.After(endTime) {
-					events = append(events, event)
 				}
+			} else if !event.Timestamp.Before(startTime) && !event.Timestamp.After(endTime) {
+				events = append(events, event)
 			}
 		}
 	}
@@ -292,82 +306,169 @@ func parseLogrusLine(line, defaultNamespace string) (CriticalEvent, error) {
 		Namespace: defaultNamespace,
 	}
 
-	// Look for timestamp in the log line
-	timeStart := strings.Index(line, "[")
-	timeEnd := strings.Index(line, "]")
-	if timeStart != -1 && timeEnd != -1 && timeEnd > timeStart {
-		timeStr := line[timeStart+1 : timeEnd]
-		// Try to parse the time string - it might be in different formats
-		timestamp, err := time.Parse("2006/01/02 15:04:05", timeStr)
-		if err != nil {
-			timestamp, err = time.Parse(time.RFC3339, timeStr)
-		}
-		if err == nil {
-			event.Timestamp = timestamp
+	// Check if the line contains CRITICAL_EVENT to identify critical events
+	if !strings.Contains(line, "CRITICAL_EVENT") {
+		return CriticalEvent{}, fmt.Errorf("not a critical event log line")
+	}
+
+	// Parse logrus structured format: time="..." level=info msg="..."
+	// Extract timestamp from time field
+	timeStart := strings.Index(line, `time="`)
+	if timeStart != -1 {
+		timeStart += len(`time="`)
+		timeEnd := strings.Index(line[timeStart:], `"`)
+		if timeEnd != -1 {
+			timeStr := line[timeStart : timeStart+timeEnd]
+			timestamp, err := time.Parse("2006-01-02T15:04:05Z07:00", timeStr)
+			if err != nil {
+				// Try RFC3339 format
+				timestamp, err = time.Parse(time.RFC3339, timeStr)
+			}
+			if err == nil {
+				event.Timestamp = timestamp
+			}
 		}
 	}
 
-	// Look for namespace in the log fields
-	if strings.Contains(line, "namespace") {
-		// Extract namespace from log fields
-		nsStart := strings.Index(line, "namespace\":\"")
+	// Extract namespace from the log fields - supports both "namespace":"value" and namespace=value formats
+	nsStart := strings.Index(line, `namespace":"`)
+	if nsStart != -1 {
+		nsStart += len(`namespace":"`)
+		nsEnd := strings.Index(line[nsStart:], `"`)
+		if nsEnd != -1 {
+			event.Namespace = line[nsStart : nsStart+nsEnd]
+		}
+	} else {
+		// Try the format: namespace=value
+		nsStart = strings.Index(line, "namespace=")
 		if nsStart != -1 {
-			nsStart += len("namespace\":\"")
-			nsEnd := strings.Index(line[nsStart:], "\"")
-			if nsEnd != -1 {
-				event.Namespace = line[nsStart : nsStart+nsEnd]
+			nsStart += len("namespace=")
+			// Find next space or end of line
+			nsEnd := strings.IndexAny(line[nsStart:], " \n\t\r")
+			if nsEnd == -1 {
+				nsEnd = len(line) - nsStart
 			}
+			event.Namespace = strings.Trim(line[nsStart:nsStart+nsEnd], `"`)
 		}
 	}
 
-	// Look for other fields in the log
-	if strings.Contains(line, "objType") {
-		typeStart := strings.Index(line, "objType\":\"")
+	// Extract type from the log fields - supports both "objType":"value" and objType=value formats
+	typeStart := strings.Index(line, `objType":"`)
+	if typeStart != -1 {
+		typeStart += len(`objType":"`)
+		typeEnd := strings.Index(line[typeStart:], `"`)
+		if typeEnd != -1 {
+			event.Type = line[typeStart : typeStart+typeEnd]
+		}
+	} else {
+		// Try the format: objType=value
+		typeStart = strings.Index(line, "objType=")
 		if typeStart != -1 {
-			typeStart += len("objType\":\"")
-			typeEnd := strings.Index(line[typeStart:], "\"")
-			if typeEnd != -1 {
-				event.Type = line[typeStart : typeStart+typeEnd]
+			typeStart += len("objType=")
+			// Find next space or end of line
+			typeEnd := strings.IndexAny(line[typeStart:], " \n\t\r")
+			if typeEnd == -1 {
+				typeEnd = len(line) - typeStart
 			}
+			event.Type = strings.Trim(line[typeStart:typeStart+typeEnd], `"`)
 		}
 	}
 
-	if strings.Contains(line, "objName") {
-		nameStart := strings.Index(line, "objName\":\"")
+	// Extract name from the log fields - supports both "objName":"value" and objName=value formats
+	nameStart := strings.Index(line, `objName":"`)
+	if nameStart != -1 {
+		nameStart += len(`objName":"`)
+		nameEnd := strings.Index(line[nameStart:], `"`)
+		if nameEnd != -1 {
+			event.Name = line[nameStart : nameStart+nameEnd]
+		}
+	} else {
+		// Try the format: objName=value
+		nameStart = strings.Index(line, "objName=")
 		if nameStart != -1 {
-			nameStart += len("objName\":\"")
-			nameEnd := strings.Index(line[nameStart:], "\"")
-			if nameEnd != -1 {
-				event.Name = line[nameStart : nameStart+nameEnd]
+			nameStart += len("objName=")
+			// Find next space or end of line
+			nameEnd := strings.IndexAny(line[nameStart:], " \n\t\r")
+			if nameEnd == -1 {
+				nameEnd = len(line) - nameStart
 			}
+			event.Name = strings.Trim(line[nameStart:nameStart+nameEnd], `"`)
 		}
 	}
 
-	if strings.Contains(line, "eventType") {
-		eventStart := strings.Index(line, "eventType\":\"")
+	// Extract event from the log fields - supports both "eventType":"value" and eventType=value formats
+	eventStart := strings.Index(line, `eventType":"`)
+	if eventStart != -1 {
+		eventStart += len(`eventType":"`)
+		eventEnd := strings.Index(line[eventStart:], `"`)
+		if eventEnd != -1 {
+			event.Event = line[eventStart : eventStart+eventEnd]
+		}
+	} else {
+		// Try the format: eventType=value
+		eventStart = strings.Index(line, "eventType=")
 		if eventStart != -1 {
-			eventStart += len("eventType\":\"")
-			eventEnd := strings.Index(line[eventStart:], "\"")
-			if eventEnd != -1 {
-				event.Event = line[eventStart : eventStart+eventEnd]
+			eventStart += len("eventType=")
+			// Find next space or end of line
+			eventEnd := strings.IndexAny(line[eventStart:], " \n\t\r")
+			if eventEnd == -1 {
+				eventEnd = len(line) - eventStart
 			}
+			event.Event = strings.Trim(line[eventStart:eventStart+eventEnd], `"`)
 		}
 	}
 
-	if strings.Contains(line, "message") {
-		msgStart := strings.Index(line, "message\":\"")
+	// Extract message from the log fields - supports both "message":"value" and message="value" formats
+	msgStart := strings.Index(line, `message":"`)
+	if msgStart != -1 {
+		msgStart += len(`message":"`)
+		msgEnd := strings.Index(line[msgStart:], `"`)
+		if msgEnd != -1 {
+			event.Message = line[msgStart : msgStart+msgEnd]
+		}
+	} else {
+		// Try the format: message="value"
+		msgStart = strings.Index(line, `message="`)
 		if msgStart != -1 {
-			msgStart += len("message\":\"")
-			msgEnd := strings.Index(line[msgStart:], "\"")
+			msgStart += len(`message="`)
+			msgEnd := strings.Index(line[msgStart:], `"`)
 			if msgEnd != -1 {
 				event.Message = line[msgStart : msgStart+msgEnd]
+			}
+		} else {
+			// Try the format: msg="value"
+			msgStart = strings.Index(line, `msg="`)
+			if msgStart != -1 {
+				msgStart += len(`msg="`)
+				msgEnd := strings.Index(line[msgStart:], `"`)
+				if msgEnd != -1 {
+					event.Message = line[msgStart : msgStart+msgEnd]
+				}
 			}
 		}
 	}
 
 	// If we have at least a timestamp and a message, consider it a valid event
-	if !event.Timestamp.IsZero() && event.Message != "" {
+	if !event.Timestamp.IsZero() && (event.Message != "" || event.Event != "") {
 		return event, nil
+	}
+
+	// If we couldn't parse the structured log, try to extract basic info from the message
+	// Check if the line contains ERROR or CRITICAL keywords
+	if strings.Contains(line, "ERROR") || strings.Contains(line, "CRITICAL") {
+		// Extract message from the msg field if possible
+		msgStart = strings.Index(line, `msg="`)
+		if msgStart != -1 {
+			msgStart += len(`msg="`)
+			msgEnd := strings.Index(line[msgStart:], `"`)
+			if msgEnd != -1 {
+				event.Message = line[msgStart : msgStart+msgEnd]
+				// If we have a message and timestamp, return the event
+				if !event.Timestamp.IsZero() {
+					return event, nil
+				}
+			}
+		}
 	}
 
 	return CriticalEvent{}, fmt.Errorf("could not parse log line")
