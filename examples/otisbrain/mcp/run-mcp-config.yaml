@@ -6,15 +6,15 @@ mcp_servers:
     args: ["--log-dir", "/root/workspace/test-env/logs"]
     transport: "http"
     server_url: "http://localhost:3001"
-  
-  - name: "k8s-operation-mcp-server" 
+
+  - name: "k8s-operation-mcp-server"
     enabled: true
     port: 3002
     binary_path: "./k8s-operation-mcp-server/k8s-operation-mcp-server"
     args: []
     transport: "http"
     server_url: "http://localhost:3002"
-    
+
   - name: "rule-engine-mcp-server"
     enabled: false  # Can be enabled/disabled on demand
     port: 3003
