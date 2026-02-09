@@ -18,6 +18,7 @@ type Config struct {
 	Rules         Rules      `yaml:"rules"`
 	Basic         Basic      `yaml:"basic"`
 	Monitoring    Monitoring `yaml:"monitoring"`
+	Monitor       MonitorConfig `yaml:"monitor"`  // Monitor module configuration
 	RuleEngine    RuleEngine `yaml:"rule_engine"`
 	AIDecision    AIDecision `yaml:"ai_decision"`
 	K8sOperation  K8sOperation `yaml:"k8s_operation"`
@@ -85,6 +86,15 @@ type Basic struct {
 	IntervalSeconds int `yaml:"interval_seconds"`
 	MaxRetries      int `yaml:"max_retries"`
 	DryRun          bool `yaml:"dry_run"`
+}
+
+// MonitorConfig holds monitor-specific configurations
+type MonitorConfig struct {
+	Enabled bool   `yaml:"enabled"`  // Whether to enable the monitor module
+	LogDir  string `yaml:"log_dir"`  // Directory where monitor logs are stored
+	MCP     struct {
+		Port int `yaml:"port"`  // Port for the Monitor MCP server
+	} `yaml:"mcp"`
 }
 
 // MemoryMonitoringConfig holds memory monitoring-specific configurations
@@ -289,6 +299,15 @@ func getDefaultConfig() *Config {
 					MaxHistoryDays: 30,
 					MinDataPoints:  10,
 				},
+			},
+		},
+		Monitor: MonitorConfig{
+			Enabled: true,
+			LogDir:  "/root/workspace/test-env/logs",
+			MCP: struct {
+				Port int `yaml:"port"`
+			}{
+				Port: 3001, // Default port for Monitor MCP server
 			},
 		},
 		RuleEngine: RuleEngine{

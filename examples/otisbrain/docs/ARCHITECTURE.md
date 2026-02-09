@@ -13,7 +13,7 @@ Monitor 模块作为整个系统的数据收集和监控中心。
 - 持续监控 Kubernetes 集群状态
 - 收集各种指标和事件（pods、nodes、资源、自定义指标）
 - 生成结构化日志和持久化指标数据
-- 将数据存储在组织化的目录结构中（\`logs/basic\`、\`logs/critical_record\`、\`logs/memory_usage\`）
+- 存储数据在组织化的目录结构中（`logs/basic`、`logs/critical_record`、`logs/memory_usage`）
 
 #### 关键组件：
 - **基础监控代理**：监控 pod、deployment 和 service 状态
@@ -84,7 +84,7 @@ MCP 模块作为标准化工具集成和协议适配层。
    - Chat 模块解释请求
    - 识别对内存分析工具的需求
 3. **MCP 发现**：
-   - MCP 模块发现可用的 \`detect_memory_leak\` 工具
+   - MCP 模块发现可用的 `detect_memory_leak` 工具
    - 与 Monitor MCP 服务建立连接
 4. **Monitor MCP 服务**：
    - 读取 Monitor 模块收集的内存使用数据
@@ -94,6 +94,64 @@ MCP 模块作为标准化工具集成和协议适配层。
    - Chat 模块接收 MCP 服务结果
    - 生成自然语言响应
 6. **用户响应**：系统响应 "命名空间 B 中的 Pod A 显示内存泄漏，趋势为 X MB/小时"
+
+## MCP 服务器架构（微服务方法）
+
+### 目录结构
+```
+mcp/
+├── run-mcp-config.yaml          # MCP 服务配置文件
+├── start-mcp-servers.sh         # 启动脚本
+├── monitor-mcp-server/          # 监控 MCP 服务器
+│   └── monitor-mcp-server       # 二进制文件
+├── k8s-operation-mcp-server/    # K8s 操作 MCP 服务器  
+│   └── k8s-operation-mcp-server # 二进制文件
+├── rule-engine-mcp-server/      # 规则引擎 MCP 服务器
+│   └── rule-engine-mcp-server   # 二进制文件
+└── ...                          # 其他 MCP 服务器
+```
+
+### 配置文件 (run-mcp-config.yaml)
+```yaml
+mcp_servers:
+  - name: "monitor-mcp-server"
+    enabled: true
+    port: 3001
+    binary_path: "./monitor-mcp-server/monitor-mcp-server"
+    args: ["--log-dir", "/workspace/logs"]
+    transport: "http"
+    server_url: "http://localhost:3001"
+  
+  - name: "k8s-operation-mcp-server" 
+    enabled: true
+    port: 3002
+    binary_path: "./k8s-operation-mcp-server/k8s-operation-mcp-server"
+    args: []
+    transport: "http"
+    server_url: "http://localhost:3002"
+    
+  - name: "rule-engine-mcp-server"
+    enabled: false  # 可以按需启用/禁用
+    port: 3003
+    binary_path: "./rule-engine-mcp-server/rule-engine-mcp-server"
+    args: []
+    transport: "http"
+    server_url: "http://localhost:3003"
+```
+
+### 启动脚本 (start-mcp-servers.sh)
+```bash
+#!/bin/bash
+# 解析配置文件并启动所有启用的 MCP 服务器
+# 每个服务器独立运行，暴露自己的端点
+# Chat 模块通过标准 MCP 协议调用这些端点
+```
+
+### 通信模式
+- **Chat Agent** ↔ **MCP 协议** ↔ **独立的 MCP 服务器**
+- 每个 MCP 服务器作为独立进程运行，有自己的端点
+- 通过标准 MCP 协议在 Chat 和 MCP 服务器之间通信
+- 真正的微服务架构，松耦合
 
 ## 基于 Monitor 的 MCP 服务器设计
 
@@ -108,7 +166,7 @@ Monitor MCP 服务器利用现有的 Monitor 模块数据提供 AI 可访问的�
 
 ### 可用工具
 1. **monitor_pods**：从基本日志读取 pod 状态
-2. **get_cluster_health**：从收集的日志分析集群健康状况
+2. **get_cluster_summary**：从收集的日志分析集群健康状况
 3. **detect_memory_leak**：从内存使用日志分析内存趋势
 4. **get_recent_events**：从事件日志检索关键事件
 5. **get_resource_utilization**：从内存使用日志获取资源使用情况

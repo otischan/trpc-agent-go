@@ -1,0 +1,24 @@
+mcp_servers:
+  - name: "monitor-mcp-server"
+    enabled: true
+    port: 3001
+    binary_path: "./monitor-mcp-server/monitor-mcp-server"
+    args: ["--log-dir", "/root/workspace/test-env/logs"]
+    transport: "http"
+    server_url: "http://localhost:3001"
+  
+  - name: "k8s-operation-mcp-server" 
+    enabled: true
+    port: 3002
+    binary_path: "./k8s-operation-mcp-server/k8s-operation-mcp-server"
+    args: []
+    transport: "http"
+    server_url: "http://localhost:3002"
+    
+  - name: "rule-engine-mcp-server"
+    enabled: false  # Can be enabled/disabled on demand
+    port: 3003
+    binary_path: "./rule-engine-mcp-server/rule-engine-mcp-server"
+    args: []
+    transport: "http"
+    server_url: "http://localhost:3003"
