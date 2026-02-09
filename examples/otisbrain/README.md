@@ -1,12 +1,12 @@
 # OtisBrain - K8S集群智能运维代理
 
-OtisBrain 是一个基于 tRPC-Agent-Go 框架构建的 Kubernetes 集群智能监控和运维系统。该系统采用微服务架构，拆分为五个独立的服务：
+OtisBrain 是一个基于 tRPC-Agent-Go 框架构建的 Kubernetes 集群智能监控和运维系统。该系统采用微服务架构，拆分为多个独立的服务：
 
 1. **监控服务 (monitoring-service)**：持续运行的监控和告警任务
 2. **聊天服务 (chat-service)**：提供实时聊天界面
 3. **规则引擎服务 (rule-engine-service)**：基于预设规则分析异常并执行自动修复策略
 4. **AI决策服务 (ai-decision-service)**：与LLM交互，基于监控数据生成决策
-5. **MCP操作服务 (mcp-service)**：统化K8S操作接口
+5. **MCP服务 (MCP servers)**：通过独立的MCP服务器提供标准化工具接口
 
 系统能够监控指定命名空间的资源状态，并根据预设规则和AI推理执行智能化运维操作。
 
@@ -46,6 +46,8 @@ monitoring:                        # 监控代理配置
   metrics_port: 8080               # 暴露指标的端口
   aggregation_interval_minutes: 10 # 日志聚合间隔（分钟），即每10分钟对关键事件进行一次汇总
   memory_monitoring:               # 内存监控配置
+    enabled: true                  # 是否启用内存监控整体功能
+    interval_seconds: 30           # 内存指标采集间隔（秒）
     basic_collection:              # 基础内存采集配置
       enabled: true                # 是否启用基础内存指标采集（启用即采集内存使用量）
       retention_days: 30           # 内存指标保留天数（用于OOM后分析）
@@ -78,10 +80,9 @@ cd ../ai-decision-service
 go build -o ai-decision-service .
 ./ai-decision-service
 
-# 构建MCP操作服务
-cd ../mcp-service
-go build -o mcp-service .
-./mcp-service
+# 启动MCP服务
+cd ../mcp
+./start-all-servers.sh start
 
 # 或者使用构建脚本
 ./build.sh

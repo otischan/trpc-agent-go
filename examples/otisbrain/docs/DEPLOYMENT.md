@@ -2,13 +2,13 @@
 
 ## 部署方式
 
-此项目拆分为五个独立的二进制程序，可通过以下方式运行：
+此项目拆分为多个独立的服务，可通过以下方式运行：
 
 - **监控服务**：`./cmd/monitoring-service/monitoring-service`
 - **聊天服务**：`./cmd/chat-service/chat-service`
 - **规则引擎服务**：`./cmd/rule-engine-service/rule-engine-service`
 - **AI决策服务**：`./cmd/ai-decision-service/ai-decision-service`
-- **MCP操作服务**：`./cmd/mcp-service/mcp-service`
+- **MCP服务**：`./mcp/start-all-servers.sh` (启动所有MCP服务器)
 - **集群内部运行**：在K8S集群内部作为独立Pod运行
 
 ## 运行程序
@@ -34,10 +34,9 @@ cd ../ai-decision-service
 go build -o ai-decision-service .
 ./ai-decision-service
 
-# 构建MCP操作服务
-cd ../mcp-service
-go build -o mcp-service .
-./mcp-service
+# 启动MCP服务
+cd ../mcp
+./start-all-servers.sh start
 
 # 或者使用构建脚本
 ./build.sh
@@ -76,9 +75,9 @@ go build -o mcp-service .
 3. **上下文感知**: 考虑历史数据和环境因素
 4. **高级分析**: 提供深度分析和建议
 
-### MCP操作服务应用场景
+### MCP服务应用场景
 
-1. **统一接口**: 为所有服务提供一致的K8S操作接口
-2. **安全控制**: 集中权限管理和审计
-3. **操作抽象**: 提供高层操作接口
-4. **状态同步**: 确保操作状态的一致性
+1. **工具标准化**: 通过MCP协议提供标准化的工具访问接口
+2. **服务解耦**: 通过配置驱动实现服务间的松耦合
+3. **AI集成**: 为AI模型提供统一的外部工具访问方式
+4. **可扩展性**: 支持动态添加新的MCP服务

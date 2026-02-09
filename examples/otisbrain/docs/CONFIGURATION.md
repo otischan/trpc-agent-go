@@ -68,10 +68,17 @@ llm:                               # 大语言模型配置
 
 mcp:                               # MCP服务器配置
   servers:
-    - name: "k8s-monitoring-mcp"
-      enabled: false
-      transport: "streamable_http"
-      server_url: "http://localhost:3000/mcp"
+    - name: "monitor-mcp-server"
+      enabled: true
+      transport: "http"
+      server_url: "http://localhost:3001"
+      timeout: 10
+      headers: {}
+
+    - name: "k8s-operation-mcp-server"
+      enabled: false  # 待实现
+      transport: "http"
+      server_url: "http://localhost:3002"
       timeout: 10
       headers: {}
 

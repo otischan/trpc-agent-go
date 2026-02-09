@@ -2,23 +2,6 @@
 
 MCP (Model Context Protocol) 服务是一套独立的工具服务器，为 AI 模型提供标准化的工具访问接口。
 
-## 目录结构
-
-```
-mcp/
-├── run-mcp-config.yaml          # MCP 服务配置文件
-├── start-all-servers.sh         # 启动脚本
-├── monitor-mcp-server/          # 监控 MCP 服务器
-│   ├── monitor-mcp-server       # 二进制文件
-│   ├── config.yaml              # 服务器配置
-│   └── Dockerfile               # 容器化配置
-├── k8s-operation-mcp-server/    # K8s 操作 MCP 服务器
-│   ├── k8s-operation-mcp-server # 二进制文件
-│   ├── config.yaml
-│   └── Dockerfile
-└── ...                          # 其他 MCP 服务器
-```
-
 ## 快速开始
 
 ### 1. 启动 MCP 服务
@@ -32,6 +15,9 @@ mcp/
 
 # 停止所有 MCP 服务器
 ./start-all-servers.sh stop
+
+# 重启服务
+./start-all-servers.sh restart
 ```
 
 ### 2. 配置 MCP 服务
@@ -49,7 +35,7 @@ mcp_servers:
     server_url: "http://localhost:3001"
 ```
 
-### 3. 与 Chat 模块集成
+## 与 Chat 模块集成
 
 Chat 模块通过配置文件与 MCP 服务实现松耦合集成。Chat 模块读取 `config/config.yaml` 中的 MCP 服务器配置来连接相应的服务：
 
@@ -65,36 +51,11 @@ mcp:
       headers: {}
 
     - name: "k8s-operation-mcp-server"
-      enabled: true
+      enabled: false  # 待实现
       transport: "http"
       server_url: "http://localhost:3002"
       timeout: 10
       headers: {}
-```
-
-Chat 模块根据配置动态初始化 MCP 工具集，实现服务发现和调用：
-
-```go
-// 在 Chat 模块中根据配置初始化 MCP 工具集
-for _, server := range config.MCP.Servers {
-    if server.Enabled {
-        mcpToolSet := mcp.NewMCPToolSet(
-            mcp.ConnectionConfig{
-                Transport: server.Transport,
-                ServerURL: server.ServerURL,
-                Timeout:   time.Duration(server.Timeout) * time.Second,
-                Headers:   server.Headers,
-            },
-            mcp.WithName(server.Name),
-        )
-        
-        if err := mcpToolSet.Init(ctx); err != nil {
-            log.Printf("Failed to initialize MCP toolset '%s': %v", server.Name, err)
-        } else {
-            toolSets = append(toolSets, mcpToolSet)
-        }
-    }
-}
 ```
 
 ## Monitor MCP 服务器
@@ -143,14 +104,7 @@ Monitor MCP 服务器直接读取 Monitor 模块生成的日志和指标数据�
 1. 创建新的目录：`mcp/my-new-mcp-server/`
 2. 实现 MCP 服务器逻辑
 3. 添加到 `run-mcp-config.yaml` 配置中
-4. 更新启动脚本（如果需要特殊启动逻辑）
-
-## 安全考虑
-
-- MCP 服务器验证所有输入参数
-- Monitor 日志在本地处理，不对外暴露
-- 实施超时和资源限制
-- 可选的身份验证层用于敏感操作
+4. 确保启动脚本支持新服务
 
 ## 故障排除
 
@@ -165,10 +119,9 @@ Monitor MCP 服务器直接读取 Monitor 模块生成的日志和指标数据�
 tail -f logs/monitor-mcp-server.log
 ```
 
-### 重启特定服务器
+### 重启服务
 ```bash
 ./start-all-servers.sh stop
-# 修改配置后
 ./start-all-servers.sh start
 ```
 

@@ -1,8 +1,30 @@
-# OtisBrain 架构设计
+# OtisBrain 整体架构设计
 
 ## 概述
 
-OtisBrain 是一个智能 Kubernetes 编排和监控系统，结合了 AI 驱动的决策能力、全面的集群监控和标准化的工具集成。系统由三个核心模块组成，协同工作为 Kubernetes 操作提供智能自动化。
+OtisBrain 是一个智能 Kubernetes 编排和监控系统，结合了 AI 驱动的决策能力、全面的集群监控和标准化的工具集成。系统采用微服务架构，通过松耦合设计实现模块间的协作，为 Kubernetes 操作提供智能自动化。
+
+## 设计原则
+
+### 1. 松耦合架构
+- 各模块独立部署和管理
+- 通过标准化协议进行通信
+- 配置驱动，而非代码硬编码
+
+### 2. 微服务设计
+- 每个功能单元作为独立服务运行
+- 独立的生命周期管理
+- 故障隔离，互不影响
+
+### 3. 标准化协议
+- 遵循标准 MCP (Model Context Protocol) 协议
+- 与不同 AI 模型兼容
+- 第三方工具集成友好
+
+### 4. 配置驱动
+- 通过配置文件管理服务连接
+- 支持动态启用/禁用服务
+- 无需修改代码即可调整架构
 
 ## 核心模块
 
@@ -84,8 +106,8 @@ MCP 模块作为标准化工具集成和协议适配层。
    - Chat 模块解释请求
    - 识别对内存分析工具的需求
 3. **MCP 发现**：
-   - MCP 模块发现可用的 `detect_memory_leak` 工具
-   - 与 Monitor MCP 服务建立连接
+   - Chat 模块根据 `config/config.yaml` 配置连接到 MCP 服务
+   - 通过标准 MCP 协议发现可用的 `detect_memory_leak` 工具
 4. **Monitor MCP 服务**：
    - 读取 Monitor 模块收集的内存使用数据
    - 对历史数据执行趋势分析
@@ -101,13 +123,15 @@ MCP 模块作为标准化工具集成和协议适配层。
 ```
 mcp/
 ├── run-mcp-config.yaml          # MCP 服务配置文件
-├── start-mcp-servers.sh         # 启动脚本
+├── start-all-servers.sh         # 启动脚本
 ├── monitor-mcp-server/          # 监控 MCP 服务器
-│   └── monitor-mcp-server       # 二进制文件
-├── k8s-operation-mcp-server/    # K8s 操作 MCP 服务器  
-│   └── k8s-operation-mcp-server # 二进制文件
-├── rule-engine-mcp-server/      # 规则引擎 MCP 服务器
-│   └── rule-engine-mcp-server   # 二进制文件
+│   ├── monitor-mcp-server       # 二进制文件
+│   ├── config.yaml              # 服务器配置
+│   └── Dockerfile               # 容器化配置
+├── k8s-operation-mcp-server/    # K8s 操作 MCP 服务器
+│   ├── k8s-operation-mcp-server # 二进制文件（待实现）
+│   ├── config.yaml
+│   └── Dockerfile
 └── ...                          # 其他 MCP 服务器
 ```
 
@@ -121,34 +145,30 @@ mcp_servers:
     args: ["--log-dir", "/workspace/logs"]
     transport: "http"
     server_url: "http://localhost:3001"
-  
-  - name: "k8s-operation-mcp-server" 
+    health_check_path: "/health"
+    timeout_seconds: 30
+
+  - name: "k8s-operation-mcp-server"
     enabled: true
     port: 3002
     binary_path: "./k8s-operation-mcp-server/k8s-operation-mcp-server"
     args: []
     transport: "http"
     server_url: "http://localhost:3002"
-    
-  - name: "rule-engine-mcp-server"
-    enabled: false  # 可以按需启用/禁用
-    port: 3003
-    binary_path: "./rule-engine-mcp-server/rule-engine-mcp-server"
-    args: []
-    transport: "http"
-    server_url: "http://localhost:3003"
+    health_check_path: "/health"
+    timeout_seconds: 30
 ```
 
-### 启动脚本 (start-mcp-servers.sh)
+### 启动脚本 (start-all-servers.sh)
 ```bash
 #!/bin/bash
-# 解析配置文件并启动所有启用的 MCP 服务器
-# 每个服务器独立运行，暴露自己的端点
+# 解析 run-mcp-config.yaml 并启动所有启用的 MCP 服务器
+# 每个服务器作为独立进程运行，暴露自己的端点
 # Chat 模块通过标准 MCP 协议调用这些端点
 ```
 
 ### 通信模式
-- **Chat Agent** ↔ **MCP 协议** ↔ **独立的 MCP 服务器**
+- **Chat Agent** ↔ **配置驱动** ↔ **独立的 MCP 服务器**
 - 每个 MCP 服务器作为独立进程运行，有自己的端点
 - 通过标准 MCP 协议在 Chat 和 MCP 服务器之间通信
 - 真正的微服务架构，松耦合
@@ -185,7 +205,7 @@ Monitor MCP 服务器利用现有的 Monitor 模块数据提供 AI 可访问的�
 - 不直接复制数据收集
 
 ### Chat ↔ MCP
-- Chat 模块发现并调用 MCP 工具
+- Chat 模块通过 `config/config.yaml` 配置发现并连接 MCP 服务
 - MCP 处理工具执行并返回结果
 - 标准化协议确保兼容性
 
@@ -194,23 +214,52 @@ Monitor MCP 服务器利用现有的 Monitor 模块数据提供 AI 可访问的�
 - 直接日志读取用于快速状态检查
 - 通过 MCP 工具间接访问进行分析
 
-## 安全考虑
+## 已实现内容
 
-- **访问控制**：MCP 工具验证输入并清理输出
-- **数据隐私**：Monitor 日志在本地处理，不对外暴露
-- **资源限制**：MCP 工具实施超时和资源约束
-- **身份验证**：敏感操作的可选身份验证层
+### Monitor 模块
+- [x] 基础监控代理
+- [x] 多命名空间监控代理
+- [x] 内存收集器
+- [x] 事件监控器
+- [x] 日志聚合器
+- [x] 结构化日志输出
 
-## 可扩展特性
+### Chat 模块
+- [x] 自然语言处理
+- [x] 工具协调
+- [x] 响应生成
+- [x] 上下文管理
+- [x] MCP 协议集成
 
-- **模块化设计**：每个模块可以独立扩展
-- **异步处理**：非阻塞工具执行
-- **缓存**：MCP 工具可以缓存 Monitor 数据以提高效率
-- **负载分配**：多个 MCP 服务可以处理不同的工具类别
+### MCP 模块
+- [x] Monitor MCP 服务器实现
+- [x] 标准 MCP 协议支持
+- [x] 动态工具发现
+- [x] 配置驱动连接
+- [x] 启动脚本
 
-## 未来扩展
+## 待实现内容
 
-- **插件架构**：支持第三方监控工具
-- **机器学习集成**：高级异常检测算法
-- **多集群支持**：跨多个集群扩展监控
-- **自定义工具开发**：允许用户创建特定领域的工具
+### Monitor 模块
+- [ ] 更多监控指标类型
+- [ ] 高级告警规则
+- [ ] 性能优化
+
+### Chat 模块
+- [ ] 更多内置工具
+- [ ] 对话历史管理
+- [ ] 用户偏好学习
+
+### MCP 模块
+- [ ] K8s Operation MCP 服务器
+- [ ] Rule Engine MCP 服务器
+- [ ] 更多专用 MCP 服务
+- [ ] 服务健康检查
+- [ ] 负载均衡
+
+### 系统级
+- [ ] 完整的部署方案
+- [ ] 安全加固
+- [ ] 性能基准测试
+- [ ] 生产环境监控
+- [ ] 自动扩缩容
