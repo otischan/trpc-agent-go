@@ -31,8 +31,28 @@ start_server() {
             return 1
         fi
 
-        # Start the server in background and capture PID
-        "$binary_path" $args > "$LOG_DIR/$name.log" 2>&1 &
+        # Special handling for monitor-mcp-server which expects port and log_dir as arguments
+        if [[ "$name" == *"monitor-mcp"* ]]; then
+            # Extract log directory from args if present
+            local log_dir="/root/workspace/test-env/logs"  # default log directory
+            local other_args=""
+            
+            # Parse args to extract log directory
+            for arg in $args; do
+                if [[ "$arg" == "--log-dir"* ]]; then
+                    log_dir=$(echo "$arg" | cut -d'=' -f2)
+                else
+                    other_args="$other_args $arg"
+                fi
+            done
+            
+            # Start monitor-mcp-server with port and log directory
+            "$binary_path" "$port" "$log_dir" $other_args > "$LOG_DIR/$name.log" 2>&1 &
+        else
+            # Start other servers normally
+            "$binary_path" $args > "$LOG_DIR/$name.log" 2>&1 &
+        fi
+        
         SERVER_PID=$!
 
         # Save PID to file
