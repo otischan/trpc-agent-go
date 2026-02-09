@@ -1,3 +1,0 @@
-# Simple config file for monitor-mcp-server
-port: 3001
-log_dir: "/root/workspace/test-env/logs"
