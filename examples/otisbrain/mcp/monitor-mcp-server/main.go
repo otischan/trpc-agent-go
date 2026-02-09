@@ -190,6 +190,7 @@ type ResourceUsage struct {
 	UsagePercent float64 `json:"usage_percent"`
 }
 
+
 // AggregatedLogAnalysisInput represents input for aggregated log analysis
 type AggregatedLogAnalysisInput struct {
 	Namespace string `json:"namespace,omitempty" jsonschema:"description=Optional namespace to analyze, if not provided all namespaces will be analyzed"`
@@ -223,6 +224,75 @@ type PodHealth struct {
 	LastErrorTime string `json:"last_error_time"`
 	ErrorCount    int    `json:"error_count"`
 	EventType     string `json:"event_type"`
+}
+
+// CriticalSummaryInput represents input for critical summary
+type CriticalSummaryInput struct {
+	TimeRangeHours int    `json:"time_range_hours,omitempty" jsonschema:"description=Time range in hours to analyze (default: 24)"`
+	SeverityFilter string `json:"severity_filter,omitempty" jsonschema:"description=Filter by severity level (critical, error, warning)"`
+	NamespaceFilter string `json:"namespace_filter,omitempty" jsonschema:"description=Filter by namespace"`
+}
+
+// CriticalSummaryOutput represents output for critical summary
+type CriticalSummaryOutput struct {
+	TimeRange      string            `json:"time_range"`
+	TotalEvents    int               `json:"total_events"`
+	CriticalEvents int               `json:"critical_events"`
+	ErrorEvents    int               `json:"error_events"`
+	WarningEvents  int               `json:"warning_events"`
+	TopIssues      []IssueSummary    `json:"top_issues"`
+	AffectedPods   []string          `json:"affected_pods"`
+	AffectedNamespaces []string      `json:"affected_namespaces"`
+	Summary        string            `json:"summary"`
+	Error          string            `json:"error,omitempty"`
+}
+
+// TopIssuesInput represents input for top issues
+type TopIssuesInput struct {
+	Limit             int    `json:"limit,omitempty" jsonschema:"description=Number of top issues to return (default: 10)"`
+	TimeWindow        int    `json:"time_window,omitempty" jsonschema:"description=Time window in hours to analyze (default: 24)"`
+	SeverityThreshold string `json:"severity_threshold,omitempty" jsonschema:"description=Minimum severity threshold (default: error)"`
+}
+
+// TopIssuesOutput represents output for top issues
+type TopIssuesOutput struct {
+	Issues []DetailedIssue `json:"issues"`
+	Error  string          `json:"error,omitempty"`
+}
+
+// DetailedIssue represents a detailed issue
+type DetailedIssue struct {
+	IssueType      string   `json:"issue_type"`
+	Count          int      `json:"count"`
+	AffectedPods   []string `json:"affected_pods"`
+	AffectedNamespaces []string `json:"affected_namespaces"`
+	Severity       string   `json:"severity"`
+	FirstOccurrence string  `json:"first_occurrence"`
+	LastOccurrence  string  `json:"last_occurrence"`
+	Trend          string   `json:"trend"` // increasing, decreasing, stable
+}
+
+// HealthTrendsInput represents input for health trends
+type HealthTrendsInput struct {
+	Period string `json:"period,omitempty" jsonschema:"description=Analysis period (day, week, month) (default: week)"`
+	Metric string `json:"metric,omitempty" jsonschema:"description=Metric type to analyze (errors, warnings, crashes, ooms) (default: errors)"`
+}
+
+// HealthTrendsOutput represents output for health trends
+type HealthTrendsOutput struct {
+	Metric         string           `json:"metric"`
+	TimeSeries     []TimePoint      `json:"time_series"`
+	Trend          string           `json:"trend"` // increasing, decreasing, stable
+	AnomalyPoints  []TimePoint      `json:"anomaly_points"`
+	Prediction     string           `json:"prediction"` // improving, worsening, stable
+	Error          string           `json:"error,omitempty"`
+}
+
+// TimePoint represents a time series data point
+type TimePoint struct {
+	Timestamp string `json:"timestamp"`
+	Value     int    `json:"value"`
+	Label     string `json:"label,omitempty"` // optional label for the data point
 }
 
 // MonitorMCPServer holds the log directory path
@@ -1220,6 +1290,645 @@ func (s *MonitorMCPServer) handleAggregatedLogAnalysis(ctx context.Context, req 
 	return analysis, nil
 }
 
+// handleGetCriticalSummary handles the get_critical_summary tool
+func (s *MonitorMCPServer) handleGetCriticalSummary(ctx context.Context, req *mcp.CallToolRequest, input CriticalSummaryInput) (CriticalSummaryOutput, error) {
+	if input.TimeRangeHours <= 0 {
+		input.TimeRangeHours = 24 // Default to 24 hours
+	}
+
+	// Initialize result
+	result := CriticalSummaryOutput{
+		TimeRange: fmt.Sprintf("Last %d hours", input.TimeRangeHours),
+	}
+
+	// Calculate time threshold
+	timeThreshold := time.Now().Add(-time.Duration(input.TimeRangeHours) * time.Hour)
+
+	// Read critical summary files from critical_record directory
+	criticalRecordDir := filepath.Join(s.logDir, "critical_record")
+	entries, err := ioutil.ReadDir(criticalRecordDir)
+	if err != nil {
+		// If critical_record directory doesn't exist, scan basic logs for critical events
+		logDir := filepath.Join(s.logDir, "basic")
+		entries, err := ioutil.ReadDir(logDir)
+		if err != nil {
+			return CriticalSummaryOutput{Error: fmt.Sprintf("Failed to read log directory: %v", err)}, nil
+		}
+
+		// Process each namespace
+		for _, entry := range entries {
+			if !entry.IsDir() {
+				continue
+			}
+			namespace := entry.Name()
+
+			// Apply namespace filter if specified
+			if input.NamespaceFilter != "" && input.NamespaceFilter != namespace {
+				continue
+			}
+
+			// Read critical events from basic logs
+			criticalEventsFile := filepath.Join(logDir, namespace, "critical_events.log")
+			if _, err := os.Stat(criticalEventsFile); err == nil {
+				events, err := s.parseCriticalEvents(criticalEventsFile)
+				if err == nil {
+					for _, event := range events {
+						// Apply severity filter if specified
+						if input.SeverityFilter != "" {
+							if !matchesSeverityFilter(event, input.SeverityFilter) {
+								continue
+							}
+						}
+
+						// Update counters based on event type
+						result.TotalEvents++
+						if strings.Contains(strings.ToLower(event.Type), "critical") || 
+						   strings.Contains(strings.ToLower(event.Message), "critical") {
+							result.CriticalEvents++
+						} else if strings.Contains(strings.ToLower(event.Type), "error") || 
+							   strings.Contains(strings.ToLower(event.Message), "error") {
+							result.ErrorEvents++
+						} else if strings.Contains(strings.ToLower(event.Type), "warning") || 
+							   strings.Contains(strings.ToLower(event.Message), "warning") {
+							result.WarningEvents++
+						}
+
+						// Add to affected pods and namespaces
+						if event.ObjectName != "" {
+							result.AffectedPods = appendIfNotExists(result.AffectedPods, event.ObjectName)
+						}
+						result.AffectedNamespaces = appendIfNotExists(result.AffectedNamespaces, namespace)
+					}
+				}
+			}
+
+			// Also check for aggregation logs
+			aggregatedLogFile := filepath.Join(logDir, namespace, "for_aggregation.log")
+			if _, err := os.Stat(aggregatedLogFile); err == nil {
+				events, err := s.parseAggregatedLogEvents(aggregatedLogFile, timeThreshold)
+				if err == nil {
+					for _, event := range events {
+						// Apply severity filter if specified
+						if input.SeverityFilter != "" {
+							if !matchesSeverityFilter(event, input.SeverityFilter) {
+								continue
+							}
+						}
+
+						// Update counters based on event type
+						result.TotalEvents++
+						if strings.Contains(strings.ToLower(event.Type), "critical") || 
+						   strings.Contains(strings.ToLower(event.Message), "critical") {
+							result.CriticalEvents++
+						} else if strings.Contains(strings.ToLower(event.Type), "error") || 
+							   strings.Contains(strings.ToLower(event.Message), "error") {
+							result.ErrorEvents++
+						} else if strings.Contains(strings.ToLower(event.Type), "warning") || 
+							   strings.Contains(strings.ToLower(event.Message), "warning") {
+							result.WarningEvents++
+						}
+
+						// Add to affected pods and namespaces
+						if event.ObjectName != "" {
+							result.AffectedPods = appendIfNotExists(result.AffectedPods, event.ObjectName)
+						}
+						result.AffectedNamespaces = appendIfNotExists(result.AffectedNamespaces, namespace)
+					}
+				}
+			}
+		}
+	} else {
+		// Process critical summary files
+		for _, entry := range entries {
+			if entry.IsDir() || !strings.HasPrefix(entry.Name(), "critical_summary_") {
+				continue
+			}
+
+			// Read and parse the critical summary file
+			summaryFile := filepath.Join(criticalRecordDir, entry.Name())
+			content, err := ioutil.ReadFile(summaryFile)
+			if err != nil {
+				continue
+			}
+
+			// This is a simplified parsing - in a real implementation, we would parse the structured summary
+			lines := strings.Split(string(content), "\n")
+			for _, line := range lines {
+				if strings.Contains(line, "Critical Events:") {
+					// Extract critical events count from the summary
+					parts := strings.Fields(line)
+					for i, part := range parts {
+						if part == "Critical" && i+1 < len(parts) {
+							if count, err := strconv.Atoi(parts[i+1]); err == nil {
+								result.CriticalEvents += count
+								result.TotalEvents += count
+							}
+						}
+					}
+				} else if strings.Contains(line, "Total Critical Events:") {
+					// Extract total critical events count
+					parts := strings.Fields(line)
+					for i, part := range parts {
+						if part == "Events:" && i+1 < len(parts) {
+							if count, err := strconv.Atoi(parts[i+1]); err == nil {
+								result.CriticalEvents += count
+								result.TotalEvents += count
+							}
+						}
+					}
+				} else if strings.Contains(line, "ERROR") || strings.Contains(line, "Error") {
+					result.ErrorEvents++
+					result.TotalEvents++
+				} else if strings.Contains(line, "WARNING") || strings.Contains(line, "Warning") {
+					result.WarningEvents++
+					result.TotalEvents++
+				}
+			}
+		}
+	}
+
+	// Generate a summary string
+	result.Summary = fmt.Sprintf("In the last %d hours: %d total events (%d critical, %d errors, %d warnings) affecting %d pods in %d namespaces", 
+		input.TimeRangeHours, result.TotalEvents, result.CriticalEvents, result.ErrorEvents, result.WarningEvents,
+		len(result.AffectedPods), len(result.AffectedNamespaces))
+
+	return result, nil
+}
+
+// handleGetTopIssues handles the get_top_issues tool
+func (s *MonitorMCPServer) handleGetTopIssues(ctx context.Context, req *mcp.CallToolRequest, input TopIssuesInput) (TopIssuesOutput, error) {
+	if input.Limit <= 0 {
+		input.Limit = 10 // Default to 10 issues
+	}
+	if input.TimeWindow <= 0 {
+		input.TimeWindow = 24 // Default to 24 hours
+	}
+
+	// Calculate time threshold
+	timeThreshold := time.Now().Add(-time.Duration(input.TimeWindow) * time.Hour)
+
+	// Initialize result
+	result := TopIssuesOutput{}
+
+	// Read logs from all namespaces to identify top issues
+	logDir := filepath.Join(s.logDir, "basic")
+	entries, err := ioutil.ReadDir(logDir)
+	if err != nil {
+		return TopIssuesOutput{Error: fmt.Sprintf("Failed to read log directory: %v", err)}, nil
+	}
+
+	// Map to track issue occurrences
+	issueCounts := make(map[string]*DetailedIssue)
+
+	// Process each namespace
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		namespace := entry.Name()
+
+		// Read critical events from basic logs
+		criticalEventsFile := filepath.Join(logDir, namespace, "critical_events.log")
+		if _, err := os.Stat(criticalEventsFile); err == nil {
+			events, err := s.parseCriticalEvents(criticalEventsFile)
+			if err == nil {
+				for _, event := range events {
+					// Filter by time if needed
+					if event.FirstSeen.Before(timeThreshold) {
+						continue
+					}
+
+					// Apply severity threshold if specified
+					if input.SeverityThreshold != "" {
+						if !matchesSeverityThreshold(event, input.SeverityThreshold) {
+							continue
+						}
+					}
+
+					// Create issue key based on event type and message
+					issueKey := fmt.Sprintf("%s:%s", event.Type, event.Message)
+					if issueCounts[issueKey] == nil {
+						issueCounts[issueKey] = &DetailedIssue{
+							IssueType:       event.Type,
+							AffectedPods:    []string{},
+							AffectedNamespaces: []string{namespace},
+							Severity:        "Medium",
+							FirstOccurrence: event.FirstSeen.Format(time.RFC3339),
+						}
+					}
+
+					// Update issue details
+					issueCounts[issueKey].Count++
+					issueCounts[issueKey].LastOccurrence = event.LastSeen.Format(time.RFC3339)
+
+					// Add pod to affected pods if not already present
+					if event.ObjectName != "" {
+						found := false
+						for _, pod := range issueCounts[issueKey].AffectedPods {
+							if pod == event.ObjectName {
+								found = true
+								break
+							}
+						}
+						if !found {
+							issueCounts[issueKey].AffectedPods = append(issueCounts[issueKey].AffectedPods, event.ObjectName)
+						}
+					}
+
+					// Add namespace to affected namespaces if not already present
+					found := false
+					for _, ns := range issueCounts[issueKey].AffectedNamespaces {
+						if ns == namespace {
+							found = true
+							break
+						}
+					}
+					if !found {
+						issueCounts[issueKey].AffectedNamespaces = append(issueCounts[issueKey].AffectedNamespaces, namespace)
+					}
+
+					// Determine severity based on event type
+					if strings.Contains(strings.ToLower(event.Type), "error") || 
+					   strings.Contains(strings.ToLower(event.Message), "error") ||
+					   strings.Contains(strings.ToLower(event.Type), "critical") ||
+					   strings.Contains(strings.ToLower(event.Message), "critical") {
+						issueCounts[issueKey].Severity = "High"
+					} else if strings.Contains(strings.ToLower(event.Type), "warning") ||
+							  strings.Contains(strings.ToLower(event.Message), "warning") {
+						if issueCounts[issueKey].Severity == "Medium" {
+							issueCounts[issueKey].Severity = "Low"
+						}
+					}
+				}
+			}
+		}
+
+		// Also check for aggregation logs
+		aggregatedLogFile := filepath.Join(logDir, namespace, "for_aggregation.log")
+		if _, err := os.Stat(aggregatedLogFile); err == nil {
+			events, err := s.parseAggregatedLogEvents(aggregatedLogFile, timeThreshold)
+			if err == nil {
+				for _, event := range events {
+					// Apply severity threshold if specified
+					if input.SeverityThreshold != "" {
+						if !matchesSeverityThreshold(event, input.SeverityThreshold) {
+							continue
+						}
+					}
+
+					// Create issue key based on event type and message
+					issueKey := fmt.Sprintf("%s:%s", event.Type, event.Message)
+					if issueCounts[issueKey] == nil {
+						issueCounts[issueKey] = &DetailedIssue{
+							IssueType:       event.Type,
+							AffectedPods:    []string{},
+							AffectedNamespaces: []string{namespace},
+							Severity:        "Medium",
+							FirstOccurrence: event.FirstSeen.Format(time.RFC3339),
+						}
+					}
+
+					// Update issue details
+					issueCounts[issueKey].Count++
+					issueCounts[issueKey].LastOccurrence = event.LastSeen.Format(time.RFC3339)
+
+					// Add pod to affected pods if not already present
+					if event.ObjectName != "" {
+						found := false
+						for _, pod := range issueCounts[issueKey].AffectedPods {
+							if pod == event.ObjectName {
+								found = true
+								break
+							}
+						}
+						if !found {
+							issueCounts[issueKey].AffectedPods = append(issueCounts[issueKey].AffectedPods, event.ObjectName)
+						}
+					}
+
+					// Add namespace to affected namespaces if not already present
+					found := false
+					for _, ns := range issueCounts[issueKey].AffectedNamespaces {
+						if ns == namespace {
+							found = true
+							break
+						}
+					}
+					if !found {
+						issueCounts[issueKey].AffectedNamespaces = append(issueCounts[issueKey].AffectedNamespaces, namespace)
+					}
+
+					// Determine severity based on event type
+					if strings.Contains(strings.ToLower(event.Type), "error") || 
+					   strings.Contains(strings.ToLower(event.Message), "error") ||
+					   strings.Contains(strings.ToLower(event.Type), "critical") ||
+					   strings.Contains(strings.ToLower(event.Message), "critical") {
+						issueCounts[issueKey].Severity = "High"
+					} else if strings.Contains(strings.ToLower(event.Type), "warning") ||
+							  strings.Contains(strings.ToLower(event.Message), "warning") {
+						if issueCounts[issueKey].Severity == "Medium" {
+							issueCounts[issueKey].Severity = "Low"
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// Convert map to slice and sort by count
+	var issues []DetailedIssue
+	for _, issue := range issueCounts {
+		issues = append(issues, *issue)
+	}
+
+	// Sort by count in descending order
+	sort.Slice(issues, func(i, j int) bool {
+		return issues[i].Count > issues[j].Count
+	})
+
+	// Limit to specified number
+	if len(issues) > input.Limit {
+		issues = issues[:input.Limit]
+	}
+
+	result.Issues = issues
+	return result, nil
+}
+
+// handleGetHealthTrends handles the get_health_trends tool
+func (s *MonitorMCPServer) handleGetHealthTrends(ctx context.Context, req *mcp.CallToolRequest, input HealthTrendsInput) (HealthTrendsOutput, error) {
+	if input.Period == "" {
+		input.Period = "week" // Default to week
+	}
+	if input.Metric == "" {
+		input.Metric = "errors" // Default to errors
+	}
+
+	// Initialize result
+	result := HealthTrendsOutput{
+		Metric: input.Metric,
+	}
+
+	// Determine time range based on period
+	var timeRange time.Duration
+	switch input.Period {
+	case "day":
+		timeRange = 24 * time.Hour
+	case "week":
+		timeRange = 7 * 24 * time.Hour
+	case "month":
+		timeRange = 30 * 24 * time.Hour
+	default:
+		timeRange = 7 * 24 * time.Hour // Default to week
+	}
+
+	// Calculate start time
+	startTime := time.Now().Add(-timeRange)
+
+	// Read logs from all namespaces to analyze trends
+	logDir := filepath.Join(s.logDir, "basic")
+	entries, err := ioutil.ReadDir(logDir)
+	if err != nil {
+		return HealthTrendsOutput{Error: fmt.Sprintf("Failed to read log directory: %v", err)}, nil
+	}
+
+	// Create time series data points
+	timeSlots := make(map[time.Time]int)
+	slotDuration := timeRange / 24 // Divide the period into 24 time slots for granularity
+
+	// Process each namespace
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		namespace := entry.Name()
+
+		// Read critical events from basic logs
+		criticalEventsFile := filepath.Join(logDir, namespace, "critical_events.log")
+		if _, err := os.Stat(criticalEventsFile); err == nil {
+			events, err := s.parseCriticalEvents(criticalEventsFile)
+			if err == nil {
+				for _, event := range events {
+					// Only include events within our time range
+					if event.FirstSeen.Before(startTime) {
+						continue
+					}
+
+					// Filter by metric type
+					includeEvent := false
+					switch input.Metric {
+					case "errors":
+						if strings.Contains(strings.ToLower(event.Type), "error") ||
+						   strings.Contains(strings.ToLower(event.Message), "error") ||
+						   strings.Contains(strings.ToLower(event.Type), "critical") ||
+						   strings.Contains(strings.ToLower(event.Message), "critical") {
+							includeEvent = true
+						}
+					case "warnings":
+						if strings.Contains(strings.ToLower(event.Type), "warning") ||
+						   strings.Contains(strings.ToLower(event.Message), "warning") {
+							includeEvent = true
+						}
+					case "crashes":
+						if strings.Contains(strings.ToLower(event.Type), "crash") ||
+						   strings.Contains(strings.ToLower(event.Message), "crash") ||
+						   strings.Contains(strings.ToLower(event.Type), "oomkilled") ||
+						   strings.Contains(strings.ToLower(event.Message), "oomkilled") {
+							includeEvent = true
+						}
+					case "ooms":
+						if strings.Contains(strings.ToLower(event.Message), "OOM") ||
+						   strings.Contains(strings.ToLower(event.Message), "oom") ||
+						   strings.Contains(strings.ToLower(event.Type), "oom") {
+							includeEvent = true
+						}
+					default:
+						includeEvent = true // Include all events if metric type is unknown
+					}
+
+					if includeEvent {
+						// Determine which time slot this event belongs to
+						slotStart := startTime
+						for slotStart.Before(event.FirstSeen) || slotStart.Equal(event.FirstSeen) {
+							slotStart = slotStart.Add(slotDuration)
+						}
+						slotStart = slotStart.Add(-slotDuration) // Go back to the correct slot
+
+						timeSlots[slotStart]++
+					}
+				}
+			}
+		}
+
+		// Also check for aggregation logs
+		aggregatedLogFile := filepath.Join(logDir, namespace, "for_aggregation.log")
+		if _, err := os.Stat(aggregatedLogFile); err == nil {
+			// For aggregation logs, we need to parse the timestamp from each line
+			content, err := ioutil.ReadFile(aggregatedLogFile)
+			if err == nil {
+				lines := strings.Split(string(content), "\n")
+				aggregationFormatRegex := regexp.MustCompile(`^CRITICAL\|([^|]+)\|([^|]+)\|([^|]+)\|([^|]+)\|([^|]+)\|(.*)$`)
+
+				for _, line := range lines {
+					aggMatches := aggregationFormatRegex.FindStringSubmatch(line)
+					if len(aggMatches) >= 7 {
+						// Parse timestamp
+						timestamp, err := time.Parse(time.RFC3339, aggMatches[1])
+						if err != nil {
+							continue
+						}
+
+						// Only include events within our time range
+						if timestamp.Before(startTime) {
+							continue
+						}
+
+						// Filter by metric type
+						eventType := aggMatches[5] // event type
+						eventMessage := aggMatches[6] // message
+						includeEvent := false
+
+						switch input.Metric {
+						case "errors":
+							if strings.Contains(strings.ToLower(eventType), "error") ||
+							   strings.Contains(strings.ToLower(eventMessage), "error") ||
+							   strings.Contains(strings.ToLower(eventType), "critical") ||
+							   strings.Contains(strings.ToLower(eventMessage), "critical") {
+								includeEvent = true
+							}
+						case "warnings":
+							if strings.Contains(strings.ToLower(eventType), "warning") ||
+							   strings.Contains(strings.ToLower(eventMessage), "warning") {
+								includeEvent = true
+							}
+						case "crashes":
+							if strings.Contains(strings.ToLower(eventType), "crash") ||
+							   strings.Contains(strings.ToLower(eventMessage), "crash") ||
+							   strings.Contains(strings.ToLower(eventType), "oomkilled") ||
+							   strings.Contains(strings.ToLower(eventMessage), "oomkilled") {
+								includeEvent = true
+							}
+						case "ooms":
+							if strings.Contains(strings.ToLower(eventMessage), "OOM") ||
+							   strings.Contains(strings.ToLower(eventMessage), "oom") ||
+							   strings.Contains(strings.ToLower(eventType), "oom") {
+								includeEvent = true
+							}
+						default:
+							includeEvent = true // Include all events if metric type is unknown
+						}
+
+						if includeEvent {
+							// Determine which time slot this event belongs to
+							slotStart := startTime
+							for slotStart.Before(timestamp) || slotStart.Equal(timestamp) {
+								slotStart = slotStart.Add(slotDuration)
+							}
+							slotStart = slotStart.Add(-slotDuration) // Go back to the correct slot
+
+							timeSlots[slotStart]++
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// Convert time slots to time series
+	for slotTime, count := range timeSlots {
+		result.TimeSeries = append(result.TimeSeries, TimePoint{
+			Timestamp: slotTime.Format(time.RFC3339),
+			Value:     count,
+		})
+	}
+
+	// Sort time series by timestamp
+	sort.Slice(result.TimeSeries, func(i, j int) bool {
+		return result.TimeSeries[i].Timestamp < result.TimeSeries[j].Timestamp
+	})
+
+	// Analyze trend (simplified)
+	if len(result.TimeSeries) >= 2 {
+		firstHalfSum := 0
+		secondHalfSum := 0
+		mid := len(result.TimeSeries) / 2
+
+		for i, point := range result.TimeSeries {
+			if i < mid {
+				firstHalfSum += point.Value
+			} else {
+				secondHalfSum += point.Value
+			}
+		}
+
+		if float64(secondHalfSum) > float64(firstHalfSum)*1.2 { // Increased by more than 20%
+			result.Trend = "increasing"
+			result.Prediction = "worsening"
+		} else if float64(secondHalfSum) < float64(firstHalfSum)*0.8 { // Decreased by more than 20%
+			result.Trend = "decreasing"
+			result.Prediction = "improving"
+		} else {
+			result.Trend = "stable"
+			result.Prediction = "stable"
+		}
+	} else {
+		result.Trend = "insufficient_data"
+		result.Prediction = "unknown"
+	}
+
+	return result, nil
+}
+
+// Helper function to check if event matches severity filter
+func matchesSeverityFilter(event EventInfo, severityFilter string) bool {
+	eventType := strings.ToLower(event.Type)
+	eventMessage := strings.ToLower(event.Message)
+
+	switch severityFilter {
+	case "critical":
+		return strings.Contains(eventType, "critical") || strings.Contains(eventMessage, "critical")
+	case "error":
+		return strings.Contains(eventType, "error") || strings.Contains(eventMessage, "error") ||
+			   strings.Contains(eventType, "critical") || strings.Contains(eventMessage, "critical")
+	case "warning":
+		return strings.Contains(eventType, "warning") || strings.Contains(eventMessage, "warning") ||
+			   strings.Contains(eventType, "error") || strings.Contains(eventMessage, "error") ||
+			   strings.Contains(eventType, "critical") || strings.Contains(eventMessage, "critical")
+	default:
+		return true
+	}
+}
+
+// Helper function to check if event matches severity threshold
+func matchesSeverityThreshold(event EventInfo, severityThreshold string) bool {
+	eventType := strings.ToLower(event.Type)
+	eventMessage := strings.ToLower(event.Message)
+
+	switch severityThreshold {
+	case "critical":
+		return strings.Contains(eventType, "critical") || strings.Contains(eventMessage, "critical")
+	case "error":
+		return strings.Contains(eventType, "error") || strings.Contains(eventMessage, "error") ||
+			   strings.Contains(eventType, "critical") || strings.Contains(eventMessage, "critical")
+	case "warning":
+		return strings.Contains(eventType, "warning") || strings.Contains(eventMessage, "warning") ||
+			   strings.Contains(eventType, "error") || strings.Contains(eventMessage, "error") ||
+			   strings.Contains(eventType, "critical") || strings.Contains(eventMessage, "critical")
+	default:
+		return true
+	}
+}
+
+// Helper function to append string to slice if not exists
+func appendIfNotExists(slice []string, s string) []string {
+	for _, item := range slice {
+		if item == s {
+			return slice
+		}
+	}
+	return append(slice, s)
+}
+
 func main() {
 	// Get log directory from command line argument or use default
 	logDir := "/root/workspace/test-env/logs" // Default log directory
@@ -1311,15 +2020,54 @@ func main() {
 		},
 	))
 
+	// Create get_critical_summary tool
+	criticalSummaryTool := mcp.NewTool(
+		"get_critical_summary",
+		mcp.WithDescription("Get a summary of critical events from the critical record logs over a specified time period, including statistics by severity level and affected resources."),
+		mcp.WithInputStruct[CriticalSummaryInput](),
+	)
+	server.RegisterTool(criticalSummaryTool, mcp.NewTypedToolHandler(
+		func(ctx context.Context, req *mcp.CallToolRequest, input CriticalSummaryInput) (CriticalSummaryOutput, error) {
+			return monitorServer.handleGetCriticalSummary(ctx, req, input)
+		},
+	))
+
+	// Create get_top_issues tool
+	topIssuesTool := mcp.NewTool(
+		"get_top_issues",
+		mcp.WithDescription("Identify the top issues affecting the cluster based on critical events and aggregated logs, with details on affected resources and severity."),
+		mcp.WithInputStruct[TopIssuesInput](),
+	)
+	server.RegisterTool(topIssuesTool, mcp.NewTypedToolHandler(
+		func(ctx context.Context, req *mcp.CallToolRequest, input TopIssuesInput) (TopIssuesOutput, error) {
+			return monitorServer.handleGetTopIssues(ctx, req, input)
+		},
+	))
+
+	// Create get_health_trends tool
+	healthTrendsTool := mcp.NewTool(
+		"get_health_trends",
+		mcp.WithDescription("Analyze time-based trends of health metrics (errors, warnings, crashes, OOMs) to identify patterns and predict cluster health direction."),
+		mcp.WithInputStruct[HealthTrendsInput](),
+	)
+	server.RegisterTool(healthTrendsTool, mcp.NewTypedToolHandler(
+		func(ctx context.Context, req *mcp.CallToolRequest, input HealthTrendsInput) (HealthTrendsOutput, error) {
+			return monitorServer.handleGetHealthTrends(ctx, req, input)
+		},
+	))
+
 	// Start HTTP server.
 	fmt.Printf("Starting Monitor MCP Server on port %d, reading logs from: %s\n", port, logDir)
-	fmt.Printf("Monitor MCP Server ready with 6 tools based on otisbrain monitor data:\n")
+	fmt.Printf("Monitor MCP Server ready with 9 tools based on otisbrain monitor data:\n")
 	fmt.Printf("- monitor_pods: Reads pod status from basic logs\n")
 	fmt.Printf("- get_cluster_summary: Analyzes cluster health from collected logs\n")
 	fmt.Printf("- detect_memory_leak: Analyzes memory trends from memory_usage logs\n")
 	fmt.Printf("- get_recent_events: Retrieves critical events from event logs\n")
 	fmt.Printf("- get_resource_utilization: Gets resource usage from memory_usage logs\n")
 	fmt.Printf("- analyze_aggregated_logs: Analyzes aggregated logs for patterns and issues\n")
+	fmt.Printf("- get_critical_summary: Provides summary of critical events from critical_record logs\n")
+	fmt.Printf("- get_top_issues: Identifies top issues affecting the cluster\n")
+	fmt.Printf("- get_health_trends: Analyzes time-based health metric trends\n")
 
 	if err := server.Start(); err != nil {
 		log.Fatalf("Server failed to start: %v", err)
