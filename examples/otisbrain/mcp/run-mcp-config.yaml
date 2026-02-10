@@ -3,7 +3,7 @@ mcp_servers:
     enabled: true
     port: 3001
     binary_path: "./monitor-mcp-server/monitor-mcp-server"
-    args: ["--log-dir", "/root/workspace/test-env/logs"]
+    args: ["--log-dir", "./logs"]
     transport: "http"
     server_url: "http://localhost:3001"
 

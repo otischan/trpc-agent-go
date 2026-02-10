@@ -1931,7 +1931,7 @@ func appendIfNotExists(slice []string, s string) []string {
 
 func main() {
 	// Get log directory from command line argument or use default
-	logDir := "/root/workspace/test-env/logs" // Default log directory
+	logDir := "./logs" // Default log directory relative to executable
 	if len(os.Args) > 2 {
 		logDir = os.Args[2]
 	}

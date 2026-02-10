@@ -7,7 +7,7 @@ OtisBrain 调试环境提供了一套完整的开发和测试工具链，用于�
 ## 目录结构
 
 ```
-/root/workspace/test-env/             # 调试环境根目录
+./test-env/                         # 调试环境根目录（相对于项目根目录）
 ├── debug-logs/                     # 调试日志记录
 │   ├── session_YYYYMMDD_N.md      # 调试会话记录
 │   └── ...
@@ -40,14 +40,14 @@ minikube addons enable metrics-server
 
 ```bash
 # 部署 OOM 测试应用
-kubectl apply -f /root/workspace/test-env/manifests/slow-oom-test.yaml
+kubectl apply -f ./test-env/manifests/slow-oom-test.yaml
 ```
 
 ### 3. 启动监控服务
 
 ```bash
 # 启动修复后的监控服务
-cd /root/workspace/test-env
+cd ./test-env
 ./monitoring-service-fixed -config ./test-config.yaml
 ```
 
@@ -55,13 +55,13 @@ cd /root/workspace/test-env
 
 ```bash
 # 检查监控服务日志
-tail -f /root/workspace/test-env/logs/basic/default/basic.log
+tail -f ./logs/basic/default/basic.log
 
 # 验证指标收集
 kubectl top pods
 
 # 检查监控服务生成的日志
-ls -la /root/workspace/test-env/logs/
+ls -la ./logs/
 ```
 
 ## 调试日志记录

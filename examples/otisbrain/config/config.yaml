@@ -73,3 +73,9 @@ k8s_operation:
   namespace: default
   metrics_port: 8084
   max_concurrent_operations: 10
+
+monitor:
+  enabled: true
+  log_dir: "./logs"  # 可以通过配置文件设置日志目录
+  mcp:
+    port: 3001

@@ -34,7 +34,7 @@ start_server() {
         # Special handling for monitor-mcp-server which expects port and log_dir as arguments
         if [[ "$name" == *"monitor-mcp"* ]]; then
             # Extract log directory from args if present
-            local log_dir="/root/workspace/test-env/logs"  # default log directory
+            local log_dir="./logs"  # default log directory relative to executable
             local other_args=""
             
             # Parse args to extract log directory

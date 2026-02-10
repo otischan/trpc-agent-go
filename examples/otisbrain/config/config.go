@@ -303,7 +303,7 @@ func getDefaultConfig() *Config {
 		},
 		Monitor: MonitorConfig{
 			Enabled: true,
-			LogDir:  "/root/workspace/test-env/logs",
+			LogDir:  "./logs", // Default log directory relative to executable
 			MCP: struct {
 				Port int `yaml:"port"`
 			}{
