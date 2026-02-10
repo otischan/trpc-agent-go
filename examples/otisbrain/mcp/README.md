@@ -32,7 +32,7 @@ mcp_servers:
     binary_path: "./monitor-mcp-server/monitor-mcp-server"
     args: ["--log-dir", "/workspace/logs"]
     transport: "http"
-    server_url: "http://localhost:3001"
+    server_url: "http://localhost:3001/mcp"
 ```
 
 ## 与 Chat 模块集成
@@ -46,14 +46,14 @@ mcp:
     - name: "monitor-mcp-server"
       enabled: true
       transport: "http"
-      server_url: "http://localhost:3001"
+      server_url: "http://localhost:3001/mcp"
       timeout: 10
       headers: {}
 
     - name: "k8s-operation-mcp-server"
       enabled: false  # 待实现
       transport: "http"
-      server_url: "http://localhost:3002"
+      server_url: "http://localhost:3002/mcp"
       timeout: 10
       headers: {}
 ```

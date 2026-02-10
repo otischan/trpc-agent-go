@@ -71,14 +71,14 @@ mcp:                               # MCP服务器配置
     - name: "monitor-mcp-server"
       enabled: true
       transport: "http"
-      server_url: "http://localhost:3001"
+      server_url: "http://localhost:3001/mcp"
       timeout: 10
       headers: {}
 
     - name: "k8s-operation-mcp-server"
       enabled: false  # 待实现
       transport: "http"
-      server_url: "http://localhost:3002"
+      server_url: "http://localhost:3002/mcp"
       timeout: 10
       headers: {}
 

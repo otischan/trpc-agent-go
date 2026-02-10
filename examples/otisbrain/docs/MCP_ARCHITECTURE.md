@@ -39,7 +39,7 @@ mcp_servers:
     binary_path: "./monitor-mcp-server/monitor-mcp-server"
     args: ["--log-dir", "/workspace/logs"]
     transport: "http"
-    server_url: "http://localhost:3001"
+    server_url: "http://localhost:3001/mcp"
     health_check_path: "/health"
     timeout_seconds: 30
 
@@ -49,7 +49,7 @@ mcp_servers:
     binary_path: "./k8s-operation-mcp-server/k8s-operation-mcp-server"
     args: []
     transport: "http"
-    server_url: "http://localhost:3002"
+    server_url: "http://localhost:3002/mcp"
     health_check_path: "/health"
     timeout_seconds: 30
 ```
@@ -82,14 +82,14 @@ mcp:
     - name: "monitor-mcp-server"
       enabled: true
       transport: "http"
-      server_url: "http://localhost:3001"
+      server_url: "http://localhost:3001/mcp"
       timeout: 10
       headers: {}
 
     - name: "k8s-operation-mcp-server"
       enabled: false  # 待实现
       transport: "http"
-      server_url: "http://localhost:3002"
+      server_url: "http://localhost:3002/mcp"
       timeout: 10
       headers: {}
 ```

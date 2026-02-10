@@ -5,7 +5,7 @@ mcp_servers:
     binary_path: "./monitor-mcp-server/monitor-mcp-server"
     args: ["--log-dir", "./logs"]
     transport: "http"
-    server_url: "http://localhost:3001"
+    server_url: "http://localhost:3001/mcp"
 
   - name: "k8s-operation-mcp-server"
     enabled: true
@@ -13,7 +13,7 @@ mcp_servers:
     binary_path: "./k8s-operation-mcp-server/k8s-operation-mcp-server"
     args: []
     transport: "http"
-    server_url: "http://localhost:3002"
+    server_url: "http://localhost:3002/mcp"
 
   - name: "rule-engine-mcp-server"
     enabled: false  # Can be enabled/disabled on demand
@@ -21,4 +21,4 @@ mcp_servers:
     binary_path: "./rule-engine-mcp-server/rule-engine-mcp-server"
     args: []
     transport: "http"
-    server_url: "http://localhost:3003"
+    server_url: "http://localhost:3003/mcp"
