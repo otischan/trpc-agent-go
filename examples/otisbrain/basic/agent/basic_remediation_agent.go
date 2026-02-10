@@ -133,7 +133,7 @@ func (bra *BasicRemediationAgent) checkAndRemediatePodIssues() error {
 
 			// Check for high restart count
 			if containerStatus.RestartCount > 5 {
-				log.Printf("Detected high restart count (%d) for pod %s/%s, initiating remediation", 
+				log.Printf("Detected high restart count (%d) for pod %s/%s, initiating remediation",
 					containerStatus.RestartCount, bra.namespace, pod.Name)
 				if err := bra.PerformRemediation("high_restart_count", pod.Name, bra.namespace); err != nil {
 					log.Printf("Failed to remediate high restart count for %s/%s: %v", bra.namespace, pod.Name, err)
@@ -155,9 +155,9 @@ func (bra *BasicRemediationAgent) checkAndRemediateDeploymentIssues() error {
 	for _, deployment := range deployments.Items {
 		// Check if deployment is unavailable
 		for _, condition := range deployment.Status.Conditions {
-			if condition.Type == appsv1.DeploymentProgressing && 
-			   condition.Status == corev1.ConditionFalse && 
-			   condition.Reason == "ProgressDeadlineExceeded" {
+			if condition.Type == appsv1.DeploymentProgressing &&
+				condition.Status == corev1.ConditionFalse &&
+				condition.Reason == "ProgressDeadlineExceeded" {
 				log.Printf("Detected unavailable deployment %s/%s, initiating remediation", bra.namespace, deployment.Name)
 				if err := bra.PerformRemediation("deployment_unavailable", deployment.Name, bra.namespace); err != nil {
 					log.Printf("Failed to remediate unavailable deployment for %s/%s: %v", bra.namespace, deployment.Name, err)

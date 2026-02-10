@@ -31,12 +31,12 @@ func (tm *ToolManager) ExecuteToolByPriority(ctx context.Context, toolName strin
 	if strings.HasPrefix(toolName, "skill_load") || strings.HasPrefix(toolName, "skill_list_doc") {
 		return tm.handleDocRequest(ctx, toolName, params)
 	}
-	
+
 	// Check if this is a direct skill execution request
 	if strings.HasPrefix(toolName, "skill_run") || strings.HasPrefix(toolName, "execute_") {
 		return tm.handleDirectSkillExecution(ctx, toolName, params)
 	}
-	
+
 	// Default to skill execution for backward compatibility
 	return tm.skillExecutor.LoadAndExecuteSkill(ctx, toolName, params)
 }
@@ -68,7 +68,7 @@ func (tm *ToolManager) handleDirectSkillExecution(ctx context.Context, toolName 
 	} else {
 		skillName = toolName
 	}
-	
+
 	// Execute the skill directly
 	return tm.skillExecutor.LoadAndExecuteSkill(ctx, skillName, params)
 }
@@ -79,10 +79,10 @@ func (tm *ToolManager) listSkillDocs(ctx context.Context) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to get available skills: %w", err)
 	}
-	
+
 	var result strings.Builder
 	result.WriteString("Available Skills Documentation:\n\n")
-	
+
 	for _, skill := range skills {
 		doc, err := tm.getSkillDocumentation(ctx, skill.Name)
 		if err != nil {
@@ -92,7 +92,7 @@ func (tm *ToolManager) listSkillDocs(ctx context.Context) (string, error) {
 			result.WriteString("\n")
 		}
 	}
-	
+
 	return result.String(), nil
 }
 
@@ -102,32 +102,32 @@ func (tm *ToolManager) loadSkillDoc(ctx context.Context, skillName string) (stri
 	tm.docsMutex.RLock()
 	doc, exists := tm.skillDocs[skillName]
 	tm.docsMutex.RUnlock()
-	
+
 	if exists {
 		return doc, nil
 	}
-	
+
 	// Load skill definition to get documentation
 	skills, err := tm.skillExecutor.GetAvailableSkills()
 	if err != nil {
 		return "", fmt.Errorf("failed to load skills: %w", err)
 	}
-	
+
 	skillDef, exists := skills[skillName]
 	if !exists {
 		return "", fmt.Errorf("skill '%s' not found", skillName)
 	}
-	
+
 	doc, err = tm.formatSkillDocumentation(skillDef)
 	if err != nil {
 		return "", fmt.Errorf("failed to format skill documentation: %w", err)
 	}
-	
+
 	// Cache the documentation
 	tm.docsMutex.Lock()
 	tm.skillDocs[skillName] = doc
 	tm.docsMutex.Unlock()
-	
+
 	return doc, nil
 }
 
@@ -137,27 +137,27 @@ func (tm *ToolManager) getSkillDocumentation(ctx context.Context, skillName stri
 	if err != nil {
 		return "", fmt.Errorf("failed to load skills: %w", err)
 	}
-	
+
 	skillDef, exists := skills[skillName]
 	if !exists {
 		return "", fmt.Errorf("skill '%s' not found", skillName)
 	}
-	
+
 	return tm.formatSkillDocumentation(skillDef)
 }
 
 // formatSkillDocumentation formats the skill documentation
 func (tm *ToolManager) formatSkillDocumentation(skillDef SkillDefinition) (string, error) {
 	var result strings.Builder
-	
+
 	result.WriteString(fmt.Sprintf("Skill: %s\n", skillDef.Name))
 	result.WriteString(fmt.Sprintf("Description: %s\n", skillDef.Description))
 	result.WriteString("Parameters:\n")
-	
+
 	for _, input := range skillDef.Inputs {
 		result.WriteString(fmt.Sprintf("  - %s: %s\n", input.Name, input.Description))
 	}
-	
+
 	result.WriteString("Execution Type: ")
 	if skillDef.Execution.Type != "" {
 		result.WriteString(skillDef.Execution.Type)
@@ -165,14 +165,14 @@ func (tm *ToolManager) formatSkillDocumentation(skillDef SkillDefinition) (strin
 		result.WriteString("Not specified")
 	}
 	result.WriteString("\n")
-	
+
 	if len(skillDef.Outputs) > 0 {
 		result.WriteString("Outputs:\n")
 		for _, output := range skillDef.Outputs {
 			result.WriteString(fmt.Sprintf("  - %s: %s\n", output.Name, output.Description))
 		}
 	}
-	
+
 	return result.String(), nil
 }
 

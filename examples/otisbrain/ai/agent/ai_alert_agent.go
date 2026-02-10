@@ -17,7 +17,7 @@ type AIEnhancedAlertAgent struct {
 // NewAIEnhancedAlertAgent creates a new AI-enhanced alert handling agent
 func NewAIEnhancedAlertAgent(cfg *config.Config) (*AIEnhancedAlertAgent, error) {
 	ctx, cancel := context.WithCancel(context.Background())
-	
+
 	return &AIEnhancedAlertAgent{
 		config: cfg,
 		ctx:    ctx,
@@ -30,7 +30,7 @@ func (aea *AIEnhancedAlertAgent) Start(ctx context.Context) error {
 	// For now, just log that the agent has started
 	// In a real implementation, this would connect to an LLM and perform AI-enhanced alert analysis
 	fmt.Printf("AIEnhancedAlertAgent started with model: %s\n", aea.config.LLM.Model)
-	
+
 	// Run alert handling in a separate goroutine
 	go func() {
 		// In a real implementation, this would:
@@ -38,11 +38,11 @@ func (aea *AIEnhancedAlertAgent) Start(ctx context.Context) error {
 		// 2. Analyze alerts and correlate them
 		// 3. Prioritize alerts based on business impact
 		// 4. Suggest remediation actions
-		
+
 		<-aea.ctx.Done()
 		fmt.Println("AIEnhancedAlertAgent stopped")
 	}()
-	
+
 	return nil
 }
 

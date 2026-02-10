@@ -145,9 +145,9 @@ func main() {
 	}
 
 	consoleLogger.Info("AI Decision service started successfully")
-	
+
 	// Wait for context cancellation
 	<-ctx.Done()
-	
+
 	consoleLogger.Info("AI Decision service stopped gracefully")
 }

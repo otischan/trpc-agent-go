@@ -24,16 +24,16 @@ type CriticalEvent struct {
 
 // GetRecentCriticalEventsRequest represents the request parameters
 type GetRecentCriticalEventsRequest struct {
-	TimeRange   string `json:"time_range"`
-	Severity    string `json:"severity"`
+	TimeRange    string `json:"time_range"`
+	Severity     string `json:"severity"`
 	ResourceType string `json:"resource_type"`
 }
 
 // GetRecentCriticalEventsResponse represents the response
 type GetRecentCriticalEventsResponse struct {
-	Events        []CriticalEvent `json:"events"`
-	Summary       string          `json:"summary"`
-	Recommendations []string       `json:"recommendations"`
+	Events          []CriticalEvent `json:"events"`
+	Summary         string          `json:"summary"`
+	Recommendations []string        `json:"recommendations"`
 }
 
 // GetRecentCriticalEvents retrieves recent critical events based on the specified criteria
@@ -75,8 +75,8 @@ func GetRecentCriticalEvents(ctx context.Context, req GetRecentCriticalEventsReq
 	recommendations := generateRecommendations(filteredEvents)
 
 	return GetRecentCriticalEventsResponse{
-		Events:        filteredEvents,
-		Summary:       summary,
+		Events:          filteredEvents,
+		Summary:         summary,
 		Recommendations: recommendations,
 	}, nil
 }
@@ -87,7 +87,7 @@ func readCriticalEventsFromLogs(after time.Time) ([]CriticalEvent, error) {
 
 	// Define the log directory path
 	logDir := filepath.Join("logs", "critical_events")
-	
+
 	// Check if the directory exists
 	if _, err := os.Stat(logDir); os.IsNotExist(err) {
 		// If the directory doesn't exist, return empty slice
@@ -143,13 +143,13 @@ func parseLogFile(filePath string, after time.Time) ([]CriticalEvent, error) {
 // parseLogLine parses a single log line to extract critical event information
 func parseLogLine(line string, after time.Time) (CriticalEvent, error) {
 	var event CriticalEvent
-	
+
 	// Parse timestamp from log line (assuming RFC3339 format)
 	// Format: time="..." level=... msg="..."
-	
+
 	// Extract timestamp
 	if idx := strings.Index(line, "time=\""); idx != -1 {
-		start := idx + 6 // Length of "time="" 
+		start := idx + 6 // Length of "time=""
 		if end := strings.Index(line[start:], "\""); end != -1 {
 			tsStr := line[start : start+end]
 			if ts, err := time.Parse(time.RFC3339, tsStr); err == nil {
@@ -166,15 +166,15 @@ func parseLogLine(line string, after time.Time) (CriticalEvent, error) {
 	} else {
 		event.Timestamp = time.Now() // fallback
 	}
-	
+
 	// Extract message
 	if idx := strings.Index(line, "msg=\""); idx != -1 {
-		start := idx + 5 // Length of "msg="" 
+		start := idx + 5 // Length of "msg=""
 		if end := strings.Index(line[start:], "\""); end != -1 {
 			event.Message = line[start : start+end]
 		}
 	}
-	
+
 	// Determine severity based on the log level
 	if strings.Contains(line, "level=error") || strings.Contains(line, "CRITICAL") {
 		event.Severity = "critical"
@@ -183,10 +183,10 @@ func parseLogLine(line string, after time.Time) (CriticalEvent, error) {
 	} else {
 		event.Severity = "info"
 	}
-	
+
 	// Extract resource type and name from message
 	event.Type, event.Name, event.Namespace = extractResourceInfo(event.Message)
-	
+
 	// Set default values if extraction failed
 	if event.Type == "" {
 		event.Type = "unknown"
@@ -197,7 +197,7 @@ func parseLogLine(line string, after time.Time) (CriticalEvent, error) {
 	if event.Namespace == "" {
 		event.Namespace = "default"
 	}
-	
+
 	return event, nil
 }
 
@@ -205,18 +205,18 @@ func parseLogLine(line string, after time.Time) (CriticalEvent, error) {
 func extractResourceInfo(message string) (resourceType, name, namespace string) {
 	// Look for patterns like "namespace/resource" or "type name in namespace"
 	lowerMsg := strings.ToLower(message)
-	
+
 	// Extract namespace if present
 	if idx := strings.Index(lowerMsg, "namespace:"); idx != -1 {
-		end := strings.Index(lowerMsg[idx:], " ") 
+		end := strings.Index(lowerMsg[idx:], " ")
 		if end == -1 {
 			end = len(lowerMsg) - idx
 		} else {
 			end += idx
 		}
-		namespace = strings.TrimSpace(lowerMsg[idx+10:end]) // "namespace:" is 10 chars
+		namespace = strings.TrimSpace(lowerMsg[idx+10 : end]) // "namespace:" is 10 chars
 	}
-	
+
 	// Extract resource type and name based on common patterns
 	if strings.Contains(lowerMsg, "pod") {
 		resourceType = "pod"
@@ -250,7 +250,7 @@ func extractResourceInfo(message string) (resourceType, name, namespace string) 
 			}
 		}
 	}
-	
+
 	return resourceType, name, namespace
 }
 
@@ -259,17 +259,17 @@ func filterEvents(events []CriticalEvent, severity, resourceType string) []Criti
 	if severity == "all" && resourceType == "all" {
 		return events
 	}
-	
+
 	var filtered []CriticalEvent
 	for _, event := range events {
 		severityMatch := severity == "all" || strings.EqualFold(event.Severity, severity)
 		typeMatch := resourceType == "all" || strings.EqualFold(event.Type, resourceType)
-		
+
 		if severityMatch && typeMatch {
 			filtered = append(filtered, event)
 		}
 	}
-	
+
 	return filtered
 }
 
@@ -278,12 +278,12 @@ func generateSummary(events []CriticalEvent) string {
 	if len(events) == 0 {
 		return "No critical events detected in the specified time range."
 	}
-	
+
 	criticalCount := 0
 	warningCount := 0
 	podIssues := 0
 	deploymentIssues := 0
-	
+
 	for _, event := range events {
 		switch strings.ToLower(event.Severity) {
 		case "critical":
@@ -291,7 +291,7 @@ func generateSummary(events []CriticalEvent) string {
 		case "warning":
 			warningCount++
 		}
-		
+
 		switch strings.ToLower(event.Type) {
 		case "pod":
 			podIssues++
@@ -299,12 +299,12 @@ func generateSummary(events []CriticalEvent) string {
 			deploymentIssues++
 		}
 	}
-	
+
 	summary := fmt.Sprintf(
 		"Found %d critical events in the specified time range: %d critical severity, %d warning severity. "+
-		"Affected resources: %d pods, %d deployments.",
+			"Affected resources: %d pods, %d deployments.",
 		len(events), criticalCount, warningCount, podIssues, deploymentIssues)
-	
+
 	return summary
 }
 
@@ -313,13 +313,13 @@ func generateRecommendations(events []CriticalEvent) []string {
 	if len(events) == 0 {
 		return []string{"No issues detected. System appears healthy."}
 	}
-	
+
 	var recommendations []string
 	seenRecommendations := make(map[string]bool)
-	
+
 	for _, event := range events {
 		var rec string
-		
+
 		// Generate recommendations based on event type and message
 		if strings.Contains(strings.ToLower(event.Message), "crashloopbackoff") {
 			rec = fmt.Sprintf("Pod %s in namespace %s is in CrashLoopBackOff. Check application logs and resource limits.", event.Name, event.Namespace)
@@ -332,22 +332,22 @@ func generateRecommendations(events []CriticalEvent) []string {
 		} else if strings.Contains(strings.ToLower(event.Message), "failed") {
 			rec = fmt.Sprintf("Resource %s in namespace %s has failed. Investigate the specific error in the logs.", event.Name, event.Namespace)
 		}
-		
+
 		// Add recommendation if it's unique and not empty
 		if rec != "" && !seenRecommendations[rec] {
 			recommendations = append(recommendations, rec)
 			seenRecommendations[rec] = true
 		}
 	}
-	
+
 	// If no specific recommendations were generated, add generic ones
 	if len(recommendations) == 0 {
-		recommendations = append(recommendations, 
+		recommendations = append(recommendations,
 			"Review the detailed event logs for more information.",
 			"Consider checking cluster resource utilization.",
 			"Verify application configurations and dependencies.")
 	}
-	
+
 	return recommendations
 }
 

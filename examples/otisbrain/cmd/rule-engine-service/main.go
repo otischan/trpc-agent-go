@@ -12,8 +12,8 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
-	basicagent "trpc.group/trpc-go/trpc-agent-go/examples/otisbrain/basic/agent"
 	"trpc.group/trpc-go/trpc-agent-go/examples/otisbrain/basic"
+	basicagent "trpc.group/trpc-go/trpc-agent-go/examples/otisbrain/basic/agent"
 	"trpc.group/trpc-go/trpc-agent-go/examples/otisbrain/config"
 	"trpc.group/trpc-go/trpc-agent-go/examples/otisbrain/shared/k8sclient"
 )

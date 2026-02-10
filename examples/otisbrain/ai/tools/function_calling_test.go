@@ -50,10 +50,10 @@ func testGetRecentCriticalEventsWrapper(ctx context.Context) (string, error) {
 // Test edge cases that might cause JSON parsing errors
 func TestEdgeCases(t *testing.T) {
 	ctx := context.Background()
-	
+
 	// Test with empty request (should use defaults)
 	emptyReq := tools.GetRecentCriticalEventsRequest{}
-	
+
 	result, err := tools.GetRecentCriticalEvents(ctx, emptyReq)
 	if err != nil {
 		t.Logf("Expected behavior: GetRecentCriticalEvents with empty request returned error: %v", err)

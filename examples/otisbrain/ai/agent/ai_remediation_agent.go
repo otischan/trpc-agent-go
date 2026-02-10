@@ -18,9 +18,9 @@ import (
 
 // AIEnhancedRemediationAgent implements the AI-enhanced remediation functionality
 type AIEnhancedRemediationAgent struct {
-	config    *config.Config
-	runner    runner.Runner
-	stopCh    chan struct{}
+	config *config.Config
+	runner runner.Runner
+	stopCh chan struct{}
 }
 
 // NewAIEnhancedRemediationAgent creates a new AI-enhanced remediation agent
@@ -61,11 +61,11 @@ func createRemediationTool() tool.Tool {
 
 // recommendRemediation recommends a remediation action based on the issue
 func recommendRemediation(ctx context.Context, req recommendRemediationReq) (recommendRemediationRsp, error) {
-	log.Printf("Recommending remediation for issue: %s in resource: %s/%s", 
+	log.Printf("Recommending remediation for issue: %s in resource: %s/%s",
 		req.Issue, req.ResourceType, req.ResourceName)
 
 	// In a real implementation, this would analyze the issue and recommend remediation
-	recommendation := fmt.Sprintf("Recommended remediation for %s '%s/%s': %s", 
+	recommendation := fmt.Sprintf("Recommended remediation for %s '%s/%s': %s",
 		req.ResourceType, req.ResourceName, req.Namespace, req.PossibleActions[0])
 
 	return recommendRemediationRsp{
@@ -78,12 +78,12 @@ func recommendRemediation(ctx context.Context, req recommendRemediationReq) (rec
 
 // recommendRemediationReq represents the request for recommending remediation
 type recommendRemediationReq struct {
-	Issue          string   `json:"issue" jsonschema:"description=Issue description,required"`
-	ResourceType   string   `json:"resource_type" jsonschema:"description=Type of Kubernetes resource,required"`
-	ResourceName   string   `json:"resource_name" jsonschema:"description=Name of the resource,required"`
-	Namespace      string   `json:"namespace" jsonschema:"description=Namespace of the resource,required"`
+	Issue           string   `json:"issue" jsonschema:"description=Issue description,required"`
+	ResourceType    string   `json:"resource_type" jsonschema:"description=Type of Kubernetes resource,required"`
+	ResourceName    string   `json:"resource_name" jsonschema:"description=Name of the resource,required"`
+	Namespace       string   `json:"namespace" jsonschema:"description=Namespace of the resource,required"`
 	PossibleActions []string `json:"possible_actions" jsonschema:"description=List of possible remediation actions,required"`
-	Context        string   `json:"context" jsonschema:"description=Additional context for remediation"`
+	Context         string   `json:"context" jsonschema:"description=Additional context for remediation"`
 }
 
 // recommendRemediationRsp represents the response from recommending remediation
@@ -106,8 +106,8 @@ func (air *AIEnhancedRemediationAgent) Start(ctx context.Context) error {
 func (air *AIEnhancedRemediationAgent) RecommendRemediation(
 	issue, resourceType, resourceName, namespace string,
 	possibleActions []string, ctxStr string) (string, float64, error) {
-	
-	log.Printf("Recommending AI remediation for issue: %s in %s %s/%s", 
+
+	log.Printf("Recommending AI remediation for issue: %s in %s %s/%s",
 		issue, resourceType, resourceName, namespace)
 
 	// Prepare the message for the AI
@@ -145,7 +145,7 @@ func (air *AIEnhancedRemediationAgent) RecommendRemediation(
 // saveRecommendationResult saves the AI remediation recommendation to the AI logs
 func (air *AIEnhancedRemediationAgent) saveRecommendationResult(
 	issue, resourceType, resourceName, namespace, result string) {
-	
+
 	// In a real implementation, this would write to the AI remediation log file
 	log.Printf("AI Remediation Recommendation saved to logs/ai/ai_analysis.log")
 	log.Printf("Issue: %s", issue)

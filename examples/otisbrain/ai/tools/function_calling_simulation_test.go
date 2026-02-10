@@ -11,31 +11,31 @@ import (
 func TestSkillCallingScenario(t *testing.T) {
 	// Create the skill executor as it would be created in the AI system
 	executor := tools.NewSkillExecutor("./test_skills")
-	
+
 	if executor == nil {
 		t.Fatal("Expected skill executor to be created, got nil")
 	}
 
 	// Test the skill execution by calling it through the executor
 	ctx := context.Background()
-	
+
 	// Test case 1: Execution with non-existent skill (should handle gracefully)
 	t.Run("NonExistentSkill", func(t *testing.T) {
 		_, err := executor.LoadAndExecuteSkill(ctx, "non_existent_skill", map[string]interface{}{})
 		if err == nil {
 			t.Error("Expected error for non-existent skill")
 		}
-		
+
 		t.Logf("Non-existent skill error (expected): %v", err)
 	})
-	
+
 	// Test case 2: Execution with empty parameters
 	t.Run("EmptyParameters", func(t *testing.T) {
 		_, err := executor.LoadAndExecuteSkill(ctx, "non_existent_skill", map[string]interface{}{})
 		if err == nil {
 			t.Error("Expected error for non-existent skill")
 		}
-		
+
 		t.Logf("Empty parameters error (expected): %v", err)
 	})
 }
@@ -43,7 +43,7 @@ func TestSkillCallingScenario(t *testing.T) {
 // TestErrorScenarios tests scenarios that might cause errors
 func TestErrorScenarios(t *testing.T) {
 	ctx := context.Background()
-	
+
 	t.Run("TestExecuteGetRecentCriticalEvents", func(t *testing.T) {
 		result, err := tools.ExecuteGetRecentCriticalEvents(ctx, "last_hour", "all", "all")
 		if err != nil {
@@ -52,7 +52,7 @@ func TestErrorScenarios(t *testing.T) {
 			t.Logf("ExecuteGetRecentCriticalEvents result: %s", result)
 		}
 	})
-	
+
 	t.Run("TestGetAllCriticalRecords", func(t *testing.T) {
 		result, err := tools.GetAllCriticalRecords(context.Background())
 		if err != nil {
@@ -66,7 +66,7 @@ func TestErrorScenarios(t *testing.T) {
 // TestSkillExecutorWithRealSkills tests the skill executor with actual functionality
 func TestSkillExecutorWithRealSkills(t *testing.T) {
 	ctx := context.Background()
-	
+
 	// Test the actual skill implementations directly
 	t.Run("DirectFunctionCall", func(t *testing.T) {
 		result, err := tools.ExecuteGetRecentCriticalEvents(ctx, "last_hour", "all", "all")

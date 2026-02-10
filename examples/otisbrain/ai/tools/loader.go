@@ -183,7 +183,7 @@ func (sl *SkillLoader) extractCommandsFromMarkdown(body string) string {
 				}
 				// If it looks like a command (doesn't start with numbers or special markdown chars)
 				if !strings.HasPrefix(cmdLine, "1)") && !strings.HasPrefix(cmdLine, "2)") &&
-				   !strings.HasPrefix(cmdLine, "-") && !strings.HasPrefix(cmdLine, "#") {
+					!strings.HasPrefix(cmdLine, "-") && !strings.HasPrefix(cmdLine, "#") {
 					// Replace parameter placeholders with template syntax
 					templatedCmd := sl.convertParameterPlaceholders(cmdLine)
 					commands = append(commands, templatedCmd)

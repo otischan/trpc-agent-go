@@ -14,8 +14,8 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/metrics/pkg/client/clientset/versioned"
 
-	"trpc.group/trpc-go/trpc-agent-go/examples/otisbrain/config"
 	"trpc.group/trpc-go/trpc-agent-go/examples/otisbrain/basic"
+	"trpc.group/trpc-go/trpc-agent-go/examples/otisbrain/config"
 )
 
 // MultiNamespaceMonitorAgent implements monitoring across multiple namespaces
@@ -154,7 +154,7 @@ func (mnma *MultiNamespaceMonitorAgent) monitorPods(namespace string, logger *lo
 			for _, condition := range pod.Status.Conditions {
 				// Only record abnormal conditions
 				if condition.Type == corev1.PodReady && condition.Status == corev1.ConditionFalse &&
-				   (condition.Reason == "PodCompleted" || condition.Reason == "ContainersNotReady") {
+					(condition.Reason == "PodCompleted" || condition.Reason == "ContainersNotReady") {
 					logger.Warnf("CRITICAL EVENT: Pod %s/%s has abnormal condition %s with reason: %s",
 						namespace, pod.Name, condition.Type, condition.Reason)
 
@@ -174,7 +174,7 @@ func (mnma *MultiNamespaceMonitorAgent) monitorPods(namespace string, logger *lo
 			if containerStatus.State.Waiting != nil {
 				waitingReason := containerStatus.State.Waiting.Reason
 				if waitingReason == "CrashLoopBackOff" || waitingReason == "ImagePullBackOff" ||
-				   waitingReason == "ErrImagePull" || waitingReason == "CreateContainerConfigError" {
+					waitingReason == "ErrImagePull" || waitingReason == "CreateContainerConfigError" {
 					logger.Warnf("CRITICAL EVENT: Container %s in pod %s/%s is in waiting state with reason: %s",
 						containerStatus.Name, namespace, pod.Name, waitingReason)
 

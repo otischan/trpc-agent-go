@@ -9,7 +9,7 @@ import (
 
 func TestGetRecentCriticalEvents(t *testing.T) {
 	ctx := context.Background()
-	
+
 	req := tools.GetRecentCriticalEventsRequest{
 		TimeRange:    "last_hour",
 		Severity:     "all",
@@ -35,7 +35,7 @@ func TestGetRecentCriticalEvents(t *testing.T) {
 func TestGetRecentCriticalEventsJSON(t *testing.T) {
 	// Test with empty JSON (this might trigger the "unexpected end of JSON input" error)
 	emptyJSON := "{}"
-	
+
 	result, err := tools.GetRecentCriticalEventsJSON(emptyJSON)
 	if err != nil {
 		t.Logf("GetRecentCriticalEventsJSON with empty JSON returned error: %v", err)
@@ -44,7 +44,7 @@ func TestGetRecentCriticalEventsJSON(t *testing.T) {
 
 	// Test with valid JSON
 	validJSON := `{"time_range":"last_hour","severity":"all","resource_type":"all"}`
-	
+
 	result, err = tools.GetRecentCriticalEventsJSON(validJSON)
 	if err != nil {
 		t.Errorf("GetRecentCriticalEventsJSON with valid JSON returned error: %v", err)
@@ -61,7 +61,7 @@ func TestFormatCriticalEventsResult(t *testing.T) {
 	// Test with empty result
 	emptyResult := tools.GetRecentCriticalEventsResponse{}
 	formatted := tools.FormatCriticalEventsResult(emptyResult)
-	
+
 	if formatted == "" {
 		t.Error("Expected non-empty formatted result even for empty events")
 	}
@@ -78,10 +78,10 @@ func TestFormatCriticalEventsResult(t *testing.T) {
 				Message:   "Test critical event",
 			},
 		},
-		Summary:       "Test summary",
+		Summary:         "Test summary",
 		Recommendations: []string{"Test recommendation"},
 	}
-	
+
 	formatted = tools.FormatCriticalEventsResult(sampleResult)
 	if formatted == "" {
 		t.Error("Expected non-empty formatted result for sample data")

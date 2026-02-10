@@ -96,17 +96,17 @@ func (th *ToolHandler) isMCPRelatedTool(toolName string) bool {
 
 // isDocRequest checks if this is a documentation request
 func (th *ToolHandler) isDocRequest(toolName string) bool {
-	return strings.HasPrefix(toolName, "skill_load") || 
-		   strings.HasPrefix(toolName, "skill_list_doc") ||
-		   strings.Contains(toolName, "doc") ||
-		   strings.Contains(toolName, "describe")
+	return strings.HasPrefix(toolName, "skill_load") ||
+		strings.HasPrefix(toolName, "skill_list_doc") ||
+		strings.Contains(toolName, "doc") ||
+		strings.Contains(toolName, "describe")
 }
 
 // isSkillRunRequest checks if this is a direct skill execution request
 func (th *ToolHandler) isSkillRunRequest(toolName string) bool {
-	return strings.HasPrefix(toolName, "skill_run") || 
-		   strings.HasPrefix(toolName, "execute_") ||
-		   strings.HasPrefix(toolName, "run_")
+	return strings.HasPrefix(toolName, "skill_run") ||
+		strings.HasPrefix(toolName, "execute_") ||
+		strings.HasPrefix(toolName, "run_")
 }
 
 // isRegularSkill checks if this is a regular skill that should follow the doc-first approach

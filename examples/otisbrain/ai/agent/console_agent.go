@@ -20,7 +20,7 @@ type AIConsoleAgent struct {
 // NewAIConsoleAgent creates a new AI console agent
 func NewAIConsoleAgent(cfg *config.Config, logger *basic.BasicLogger) *AIConsoleAgent {
 	ctx, cancel := context.WithCancel(context.Background())
-	
+
 	return &AIConsoleAgent{
 		config: cfg,
 		logger: logger,

@@ -9,28 +9,28 @@ import (
 
 // Config represents the application configuration
 type Config struct {
-	LogLevel      string     `yaml:"log_level"`
-	MetricsPort   int        `yaml:"metrics_port"`
-	Namespace     string     `yaml:"namespace"`
-	Kubeconfig    string     `yaml:"kubeconfig"`
-	LLM           LLM        `yaml:"llm"`
-	MCP           MCP        `yaml:"mcp"`
-	Rules         Rules      `yaml:"rules"`
-	Basic         Basic      `yaml:"basic"`
-	Monitoring    Monitoring `yaml:"monitoring"`
-	Monitor       MonitorConfig `yaml:"monitor"`  // Monitor module configuration
-	RuleEngine    RuleEngine `yaml:"rule_engine"`
-	AIDecision    AIDecision `yaml:"ai_decision"`
-	K8sOperation  K8sOperation `yaml:"k8s_operation"`
+	LogLevel     string        `yaml:"log_level"`
+	MetricsPort  int           `yaml:"metrics_port"`
+	Namespace    string        `yaml:"namespace"`
+	Kubeconfig   string        `yaml:"kubeconfig"`
+	LLM          LLM           `yaml:"llm"`
+	MCP          MCP           `yaml:"mcp"`
+	Rules        Rules         `yaml:"rules"`
+	Basic        Basic         `yaml:"basic"`
+	Monitoring   Monitoring    `yaml:"monitoring"`
+	Monitor      MonitorConfig `yaml:"monitor"` // Monitor module configuration
+	RuleEngine   RuleEngine    `yaml:"rule_engine"`
+	AIDecision   AIDecision    `yaml:"ai_decision"`
+	K8sOperation K8sOperation  `yaml:"k8s_operation"`
 }
 
 // LLM holds LLM-specific configurations
 type LLM struct {
-	Model     string `yaml:"model"`
-	APIKey    string `yaml:"api_key"`
-	BaseURL   string `yaml:"base_url"`
-	Enabled   bool   `yaml:"enabled"`
-	Variant   string `yaml:"variant"`
+	Model   string `yaml:"model"`
+	APIKey  string `yaml:"api_key"`
+	BaseURL string `yaml:"base_url"`
+	Enabled bool   `yaml:"enabled"`
+	Variant string `yaml:"variant"`
 }
 
 // MCPServer holds individual MCP server configuration
@@ -50,12 +50,12 @@ type MCP struct {
 
 // RuleEngine holds rule engine service configurations
 type RuleEngine struct {
-	EnableRuleEngine       bool   `yaml:"enable_rule_engine"`
-	Namespace             string `yaml:"namespace"`
-	Kubeconfig            string `yaml:"kubeconfig"`
-	MetricsPort           int    `yaml:"metrics_port"`
-	AggregationInterval   int    `yaml:"aggregation_interval_minutes"` // Interval for aggregating logs in minutes
-	RuleCheckInterval     int    `yaml:"rule_check_interval"`         // Interval for checking rules in seconds
+	EnableRuleEngine    bool   `yaml:"enable_rule_engine"`
+	Namespace           string `yaml:"namespace"`
+	Kubeconfig          string `yaml:"kubeconfig"`
+	MetricsPort         int    `yaml:"metrics_port"`
+	AggregationInterval int    `yaml:"aggregation_interval_minutes"` // Interval for aggregating logs in minutes
+	RuleCheckInterval   int    `yaml:"rule_check_interval"`          // Interval for checking rules in seconds
 }
 
 // AIDecision holds AI decision service configurations
@@ -63,7 +63,7 @@ type AIDecision struct {
 	EnableAIDecision      bool   `yaml:"enable_ai_decision"`
 	Namespace             string `yaml:"namespace"`
 	MetricsPort           int    `yaml:"metrics_port"`
-	DecisionInterval      int    `yaml:"decision_interval"`            // Interval for AI decisions in seconds
+	DecisionInterval      int    `yaml:"decision_interval"` // Interval for AI decisions in seconds
 	MaxConcurrentRequests int    `yaml:"max_concurrent_requests"`
 }
 
@@ -83,53 +83,53 @@ type Rules struct {
 
 // Basic holds basic monitoring configurations
 type Basic struct {
-	IntervalSeconds int `yaml:"interval_seconds"`
-	MaxRetries      int `yaml:"max_retries"`
+	IntervalSeconds int  `yaml:"interval_seconds"`
+	MaxRetries      int  `yaml:"max_retries"`
 	DryRun          bool `yaml:"dry_run"`
 }
 
 // MonitorConfig holds monitor-specific configurations
 type MonitorConfig struct {
-	Enabled bool   `yaml:"enabled"`  // Whether to enable the monitor module
-	LogDir  string `yaml:"log_dir"`  // Directory where monitor logs are stored
+	Enabled bool   `yaml:"enabled"` // Whether to enable the monitor module
+	LogDir  string `yaml:"log_dir"` // Directory where monitor logs are stored
 	MCP     struct {
-		Port int `yaml:"port"`  // Port for the Monitor MCP server
+		Port int `yaml:"port"` // Port for the Monitor MCP server
 	} `yaml:"mcp"`
 }
 
 // MemoryMonitoringConfig holds memory monitoring-specific configurations
 type MemoryMonitoringConfig struct {
-	Enabled         bool `yaml:"enabled"`  // Whether to enable memory monitoring overall
-	IntervalSeconds int  `yaml:"interval_seconds"`  // Memory metrics collection interval
+	Enabled         bool `yaml:"enabled"`          // Whether to enable memory monitoring overall
+	IntervalSeconds int  `yaml:"interval_seconds"` // Memory metrics collection interval
 	BasicCollection struct {
-		Enabled      bool `yaml:"enabled"`
-		RetentionDays int `yaml:"retention_days"`
+		Enabled       bool `yaml:"enabled"`
+		RetentionDays int  `yaml:"retention_days"`
 	} `yaml:"basic_collection"`
 	OOMAnalysis struct {
 		Enabled        bool `yaml:"enabled"`
-		MaxHistoryDays int `yaml:"max_history_days"`
-		MinDataPoints  int `yaml:"min_data_points"`
+		MaxHistoryDays int  `yaml:"max_history_days"`
+		MinDataPoints  int  `yaml:"min_data_points"`
 	} `yaml:"oom_analysis"`
 }
 
 // PVCMonitoringConfig holds PVC monitoring-specific configurations
 type PVCMonitoringConfig struct {
-	Enabled              bool `yaml:"enabled"`
-	CollectionIntervalSeconds int `yaml:"collection_interval_seconds"` // 数据采集间隔（秒）
-	WarningThresholdPercent   int `yaml:"warning_threshold_percent"`   // 警告阈值（百分比）
-	MaxPodsDisplay       int `yaml:"max_pods_display"`                // 显示使用的Pod最大数量
-	RetentionDays        int `yaml:"retention_days"`                  // 数据保留天数
+	Enabled                   bool `yaml:"enabled"`
+	CollectionIntervalSeconds int  `yaml:"collection_interval_seconds"` // 数据采集间隔（秒）
+	WarningThresholdPercent   int  `yaml:"warning_threshold_percent"`   // 警告阈值（百分比）
+	MaxPodsDisplay            int  `yaml:"max_pods_display"`            // 显示使用的Pod最大数量
+	RetentionDays             int  `yaml:"retention_days"`              // 数据保留天数
 }
 
 // Monitoring holds monitoring-specific configurations
 type Monitoring struct {
-	EnableMonitorResources bool `yaml:"enable_monitor_resources"`
-	EnableMonitorEvents    bool `yaml:"enable_monitor_events"`
-	Namespaces          []string `yaml:"namespaces"`          // Multiple namespaces for monitoring
-	Kubeconfig          string   `yaml:"kubeconfig"`
-	MetricsPort         int      `yaml:"metrics_port"`
-	AggregationInterval int      `yaml:"aggregation_interval_minutes"` // Interval for aggregating logs in minutes
-	MemoryMonitoring    MemoryMonitoringConfig `yaml:"memory_monitoring"` // Memory monitoring configuration
+	EnableMonitorResources bool                   `yaml:"enable_monitor_resources"`
+	EnableMonitorEvents    bool                   `yaml:"enable_monitor_events"`
+	Namespaces             []string               `yaml:"namespaces"` // Multiple namespaces for monitoring
+	Kubeconfig             string                 `yaml:"kubeconfig"`
+	MetricsPort            int                    `yaml:"metrics_port"`
+	AggregationInterval    int                    `yaml:"aggregation_interval_minutes"` // Interval for aggregating logs in minutes
+	MemoryMonitoring       MemoryMonitoringConfig `yaml:"memory_monitoring"`            // Memory monitoring configuration
 }
 
 // Validate validates the configuration parameters
@@ -276,24 +276,24 @@ func getDefaultConfig() *Config {
 		Monitoring: Monitoring{
 			EnableMonitorResources: true,
 			EnableMonitorEvents:    true,
-			Namespaces:          []string{"default"}, // Default to single namespace for backward compatibility
-			Kubeconfig:          "",
-			MetricsPort:         8080,
-			AggregationInterval: 10, // Default to 10 minutes
+			Namespaces:             []string{"default"}, // Default to single namespace for backward compatibility
+			Kubeconfig:             "",
+			MetricsPort:            8080,
+			AggregationInterval:    10, // Default to 10 minutes
 			MemoryMonitoring: MemoryMonitoringConfig{
 				Enabled:         true,
 				IntervalSeconds: 30, // Default to 30 seconds
 				BasicCollection: struct {
-					Enabled      bool `yaml:"enabled"`
-					RetentionDays int `yaml:"retention_days"`
+					Enabled       bool `yaml:"enabled"`
+					RetentionDays int  `yaml:"retention_days"`
 				}{
-					Enabled:      true,
+					Enabled:       true,
 					RetentionDays: 30,
 				},
 				OOMAnalysis: struct {
 					Enabled        bool `yaml:"enabled"`
-					MaxHistoryDays int `yaml:"max_history_days"`
-					MinDataPoints  int `yaml:"min_data_points"`
+					MaxHistoryDays int  `yaml:"max_history_days"`
+					MinDataPoints  int  `yaml:"min_data_points"`
 				}{
 					Enabled:        true,
 					MaxHistoryDays: 30,
@@ -311,12 +311,12 @@ func getDefaultConfig() *Config {
 			},
 		},
 		RuleEngine: RuleEngine{
-			EnableRuleEngine:      true,
-			Namespace:             "default",
-			Kubeconfig:            "",
-			MetricsPort:           8082,
-			AggregationInterval:   10, // Default to 10 minutes
-			RuleCheckInterval:     60, // Default to 60 seconds
+			EnableRuleEngine:    true,
+			Namespace:           "default",
+			Kubeconfig:          "",
+			MetricsPort:         8082,
+			AggregationInterval: 10, // Default to 10 minutes
+			RuleCheckInterval:   60, // Default to 60 seconds
 		},
 		AIDecision: AIDecision{
 			EnableAIDecision:      false,

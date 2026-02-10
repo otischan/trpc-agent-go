@@ -12,11 +12,9 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
 	"k8s.io/metrics/pkg/client/clientset/versioned"
-	basicagent "trpc.group/trpc-go/trpc-agent-go/examples/otisbrain/basic/agent"
 	"trpc.group/trpc-go/trpc-agent-go/examples/otisbrain/basic"
+	"trpc.group/trpc-go/trpc-agent-go/examples/otisbrain/basic/agent/monitor"
 	"trpc.group/trpc-go/trpc-agent-go/examples/otisbrain/config"
 	"trpc.group/trpc-go/trpc-agent-go/examples/otisbrain/shared/k8sclient"
 )
@@ -129,11 +127,11 @@ func main() {
 	}
 
 	// Create metrics client for memory metrics
-	config, err := k8sclient.GetConfig(cfg.Monitoring.Kubeconfig)
+	kubeConfig, err := k8sclient.GetConfig(cfg.Monitoring.Kubeconfig)
 	if err != nil {
 		log.Fatalf("Failed to get config: %v", err)
 	}
-	metricsClient, err := versioned.NewForConfig(config)
+	metricsClient, err := versioned.NewForConfig(kubeConfig)
 	if err != nil {
 		log.Fatalf("Failed to create metrics client: %v", err)
 	}
@@ -156,100 +154,21 @@ func main() {
 	logAggregator.Start()
 	defer logAggregator.Stop()
 
-	// Initialize and run basic monitoring agent if enabled (in background with file-only logger)
-	if cfg.Monitoring.EnableMonitorResources {
-		// Start in a separate goroutine to avoid logging interfering with chat
-		go func() {
-			// Use the Namespaces field
-			namespaces := cfg.Monitoring.Namespaces
-			if len(namespaces) == 0 {
-				// Fallback to default namespace if none specified
-				namespaces = []string{"default"}
-			}
-
-			if len(namespaces) == 1 && namespaces[0] == "all" {
-				// Special case: monitor all namespaces
-				consoleLogger.Info("Monitoring all namespaces")
-				monitorAgent := basicagent.NewMultiNamespaceMonitorAgent(clientset, metricsClient, getAllNamespaces(clientset), cfg, fileLogger.Logger)
-				if err := monitorAgent.Start(ctx); err != nil {
-					consoleLogger.Errorf("Error starting multi-namespace monitoring agent: %v", err)
-				}
-			} else if len(namespaces) > 1 {
-				// Multiple namespaces specified
-				consoleLogger.Infof("Monitoring multiple namespaces: %v", namespaces)
-				monitorAgent := basicagent.NewMultiNamespaceMonitorAgent(clientset, metricsClient, namespaces, cfg, fileLogger.Logger)
-				if err := monitorAgent.Start(ctx); err != nil {
-					consoleLogger.Errorf("Error starting multi-namespace monitoring agent: %v", err)
-				}
-			} else {
-				// Single namespace - use the original agent for backward compatibility
-				consoleLogger.Infof("Monitoring single namespace: %s", namespaces[0])
-				
-				// Create a namespace-specific logger for this agent
-				nsLogger, err := basic.NewBasicLoggerWithNamespace(cfg.LogLevel, namespaces[0])
-				if err != nil {
-					consoleLogger.Errorf("Failed to create namespace-specific logger for %s: %v", namespaces[0], err)
-					// fallback to using the global file logger
-					nsLogger = fileLogger
-				}
-				
-				monitorAgent := basicagent.NewBasicMonitorAgent(clientset, metricsClient, namespaces[0], cfg, nsLogger.Logger)
-				if err := monitorAgent.Start(ctx); err != nil {
-					consoleLogger.Errorf("Error starting basic monitoring agent: %v", err)
-				} else {
-					consoleLogger.Infof("Successfully started basic monitoring agent for namespace: %s", namespaces[0])
-				}
-			}
-		}()
+	// Use the new monitoring architecture
+	factory := &monitor.MonitorFactory{}
+	monitorAgent, err := factory.CreateMonitorAgent(clientset, metricsClient, cfg, fileLogger.Logger)
+	if err != nil {
+		consoleLogger.Fatalf("Failed to create monitoring agent: %v", err)
 	}
 
-	// Initialize and run basic event monitoring agent if enabled (in background with file-only logger)
-	if cfg.Monitoring.EnableMonitorEvents {
-		// Start in a separate goroutine to avoid logging interfering with chat
-		go func() {
-			// Use the first namespace from the list for events
-			eventNamespace := cfg.Monitoring.Namespaces[0]
-			if len(cfg.Monitoring.Namespaces) == 0 {
-				// Fallback to default namespace if none specified
-				eventNamespace = "default"
-			}
-
-			// Create a namespace-specific logger for this agent
-			nsLogger, err := basic.NewBasicLoggerWithNamespace(cfg.LogLevel, eventNamespace)
-			if err != nil {
-				consoleLogger.Errorf("Failed to create namespace-specific logger for %s: %v", eventNamespace, err)
-				// fallback to using the global file logger
-				nsLogger = fileLogger
-			}
-
-			eventAgent := basicagent.NewBasicEventMonitorAgent(clientset, metricsClient, eventNamespace, cfg, nsLogger.Logger)
-			if err := eventAgent.Start(ctx); err != nil {
-				consoleLogger.Errorf("Error starting basic event monitoring agent: %v", err)
-			}
-		}()
+	if err := monitorAgent.Start(ctx); err != nil {
+		consoleLogger.Errorf("Error starting monitoring agent: %v", err)
 	}
 
-
-	consoleLogger.Info("Monitoring service started successfully")
+	consoleLogger.Info("Monitoring service started successfully with new architecture")
 
 	// Wait for context cancellation
 	<-ctx.Done()
 
 	consoleLogger.Info("Monitoring service stopped gracefully")
-}
-
-// getAllNamespaces gets all namespaces in the cluster
-func getAllNamespaces(clientset *kubernetes.Clientset) []string {
-	namespaces, err := clientset.CoreV1().Namespaces().List(context.Background(), metav1.ListOptions{})
-	if err != nil {
-		log.Printf("Failed to list namespaces: %v", err)
-		// Return default namespace as fallback
-		return []string{"default"}
-	}
-
-	var nsList []string
-	for _, ns := range namespaces.Items {
-		nsList = append(nsList, ns.Name)
-	}
-	return nsList
 }

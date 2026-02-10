@@ -14,18 +14,18 @@ import (
 	"k8s.io/client-go/kubernetes"
 	metricsv "k8s.io/metrics/pkg/client/clientset/versioned"
 
-	"trpc.group/trpc-go/trpc-agent-go/examples/otisbrain/config"
 	"trpc.group/trpc-go/trpc-agent-go/examples/otisbrain/basic"
+	"trpc.group/trpc-go/trpc-agent-go/examples/otisbrain/config"
 )
 
 // BasicMonitorAgent implements the basic monitoring functionality
 type BasicMonitorAgent struct {
-	clientset     *kubernetes.Clientset
-	metricsClient *metricsv.Clientset
-	namespace     string
-	config        *config.Config
-	logger        *logrus.Logger
-	stopCh        chan struct{}
+	clientset       *kubernetes.Clientset
+	metricsClient   *metricsv.Clientset
+	namespace       string
+	config          *config.Config
+	logger          *logrus.Logger
+	stopCh          chan struct{}
 	memoryCollector *basic.MemoryCollector
 }
 
@@ -114,7 +114,6 @@ func (bma *BasicMonitorAgent) monitor() error {
 	return nil
 }
 
-
 // monitorPods monitors the status of pods in the namespace
 func (bma *BasicMonitorAgent) monitorPods() error {
 	pods, err := bma.clientset.CoreV1().Pods(bma.namespace).List(context.TODO(), metav1.ListOptions{})
@@ -131,7 +130,7 @@ func (bma *BasicMonitorAgent) monitorPods() error {
 			for _, condition := range pod.Status.Conditions {
 				// Only record abnormal conditions
 				if condition.Type == corev1.PodReady && condition.Status == corev1.ConditionFalse &&
-				   (condition.Reason == "PodCompleted" || condition.Reason == "ContainersNotReady") {
+					(condition.Reason == "PodCompleted" || condition.Reason == "ContainersNotReady") {
 					bma.logger.Warnf("CRITICAL EVENT: Pod %s/%s has abnormal condition %s with reason: %s",
 						bma.namespace, pod.Name, condition.Type, condition.Reason)
 
@@ -151,7 +150,7 @@ func (bma *BasicMonitorAgent) monitorPods() error {
 			if containerStatus.State.Waiting != nil {
 				waitingReason := containerStatus.State.Waiting.Reason
 				if waitingReason == "CrashLoopBackOff" || waitingReason == "ImagePullBackOff" ||
-				   waitingReason == "ErrImagePull" || waitingReason == "CreateContainerConfigError" {
+					waitingReason == "ErrImagePull" || waitingReason == "CreateContainerConfigError" {
 					bma.logger.Warnf("CRITICAL EVENT: Container %s in pod %s/%s is in waiting state with reason: %s",
 						containerStatus.Name, bma.namespace, pod.Name, waitingReason)
 
@@ -250,13 +249,13 @@ func (bma *BasicMonitorAgent) writeCriticalEvent(objType, objName, eventType, me
 		"eventType": eventType,
 		"message":   message,
 	}).Error("CRITICAL_EVENT")
-	
+
 	// Write critical event to dedicated file in the logger's path
 	// Since we're passing the logger from BasicLogger.Logger, we need to handle critical events properly
 	// Create a more direct approach by using the namespace to write to the correct path
 	logPath := filepath.Join("logs", "basic", bma.namespace)
 	criticalLogPath := filepath.Join(logPath, "critical_events.log")
-	
+
 	criticalLogFile, err := os.OpenFile(criticalLogPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
 	if err == nil {
 		defer criticalLogFile.Close()
@@ -270,8 +269,8 @@ func (bma *BasicMonitorAgent) writeCriticalEvent(objType, objName, eventType, me
 				"event":   eventType,
 				"message": message,
 			},
-			Level: logrus.ErrorLevel,
-			Time:  time.Now(),
+			Level:   logrus.ErrorLevel,
+			Time:    time.Now(),
 			Message: "CRITICAL_EVENT_LOG",
 		}
 

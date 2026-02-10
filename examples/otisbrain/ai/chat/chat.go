@@ -16,11 +16,11 @@ import (
 	"trpc.group/trpc-go/trpc-agent-go/model"
 	"trpc.group/trpc-go/trpc-agent-go/model/openai"
 	"trpc.group/trpc-go/trpc-agent-go/runner"
+	sessioninmemory "trpc.group/trpc-go/trpc-agent-go/session/inmemory"
 	"trpc.group/trpc-go/trpc-agent-go/skill"
 	"trpc.group/trpc-go/trpc-agent-go/tool"
 	"trpc.group/trpc-go/trpc-agent-go/tool/mcp"
 	tmcp "trpc.group/trpc-go/trpc-mcp-go"
-	sessioninmemory "trpc.group/trpc-go/trpc-agent-go/session/inmemory"
 
 	"trpc.group/trpc-go/trpc-agent-go/examples/otisbrain/ai/tools"
 	"trpc.group/trpc-go/trpc-agent-go/examples/otisbrain/basic"
@@ -30,17 +30,17 @@ import (
 
 // AIChat manages the AI chat interface for the OtisBrain system
 type AIChat struct {
-	modelName      string
-	streaming      bool
-	runner         runner.Runner
-	userID         string
-	sessionID      string
-	variant        string
-	config         *config.Config
-	logger         *basic.BasicLogger
-	skillRepo      skill.Repository
-	mcpToolSets    []*mcp.ToolSet
-	toolManager    *tools.ToolManager
+	modelName   string
+	streaming   bool
+	runner      runner.Runner
+	userID      string
+	sessionID   string
+	variant     string
+	config      *config.Config
+	logger      *basic.BasicLogger
+	skillRepo   skill.Repository
+	mcpToolSets []*mcp.ToolSet
+	toolManager *tools.ToolManager
 }
 
 // NewAIChat creates a new AI chat instance
@@ -92,7 +92,7 @@ func (c *AIChat) setup(ctx context.Context) error {
 	// Use project root from environment variable to ensure correct path resolution
 	projectRoot := os.Getenv("OTISBRAIN_PROJECT_ROOT")
 	if projectRoot == "" {
-		projectRoot = "."  // fallback to current directory
+		projectRoot = "." // fallback to current directory
 	}
 	skillsRoot := filepath.Join(projectRoot, "resources", "skills")
 	repo, err := skill.NewFSRepository(skillsRoot)
@@ -108,10 +108,10 @@ func (c *AIChat) setup(ctx context.Context) error {
 		} else {
 			c.logger.Printf("Fallback skills initialized successfully. Available skills: %d", len(availableSkills))
 		}
-		c.skillRepo = nil  // Explicitly set to nil when repo initialization fails
+		c.skillRepo = nil // Explicitly set to nil when repo initialization fails
 	} else {
 		c.logger.Printf("Skills repository initialized from: %s", skillsRoot)
-		c.skillRepo = repo  // Store the repository for later use
+		c.skillRepo = repo // Store the repository for later use
 	}
 
 	// Initialize the tool manager
@@ -392,7 +392,7 @@ func (c *AIChat) listSkills(ctx context.Context) error {
 	// Use project root from environment variable to ensure correct path resolution
 	projectRoot := os.Getenv("OTISBRAIN_PROJECT_ROOT")
 	if projectRoot == "" {
-		projectRoot = "."  // fallback to current directory
+		projectRoot = "." // fallback to current directory
 	}
 	skillsPath := filepath.Join(projectRoot, "resources", "skills")
 	skillExecutor := tools.NewSkillExecutor(skillsPath)
@@ -457,4 +457,3 @@ func (c *AIChat) ExecuteToolByPriority(ctx context.Context, toolName string, par
 	skillExecutor := tools.NewSkillExecutor(filepath.Join(".", "resources", "skills"))
 	return skillExecutor.LoadAndExecuteSkill(ctx, toolName, params)
 }
-

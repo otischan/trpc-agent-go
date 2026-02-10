@@ -16,18 +16,18 @@ import (
 	"k8s.io/client-go/kubernetes"
 	metricsv "k8s.io/metrics/pkg/client/clientset/versioned"
 
-	"trpc.group/trpc-go/trpc-agent-go/examples/otisbrain/config"
 	"trpc.group/trpc-go/trpc-agent-go/examples/otisbrain/basic"
+	"trpc.group/trpc-go/trpc-agent-go/examples/otisbrain/config"
 )
 
 // BasicEventMonitorAgent handles Kubernetes event monitoring
 type BasicEventMonitorAgent struct {
-	clientset     *kubernetes.Clientset
-	metricsClient *metricsv.Clientset
-	namespace     string
-	config        *config.Config
-	logger        *logrus.Logger
-	stopCh        chan struct{}
+	clientset       *kubernetes.Clientset
+	metricsClient   *metricsv.Clientset
+	namespace       string
+	config          *config.Config
+	logger          *logrus.Logger
+	stopCh          chan struct{}
 	memoryCollector *basic.MemoryCollector
 }
 
@@ -351,12 +351,12 @@ func (bea *BasicEventMonitorAgent) determineSeverity(event *corev1.Event) string
 	// Only consider abnormal events as critical/error, ignore normal operations
 	switch event.Reason {
 	case "Failed", "FailedScheduling", "FailedMount", "FailedCreate", "FailedDelete",
-	     "Unhealthy", "ImagePullBackOff", "OOMKilled":
+		"Unhealthy", "ImagePullBackOff", "OOMKilled":
 		return "CRITICAL"
 	case "Warning", "Terminating", "Killing", "Evicted", "BackOff", "CrashLoopBackOff":
 		return "ERROR"
 	case "Created", "Started", "Pulled", "Scheduled", "Pulling", "Starting", "Start",
-	     "ContainerCreating", "SuccessfulAttachVolume", "SuccessfulCreate", "ScalingReplicaSet":
+		"ContainerCreating", "SuccessfulAttachVolume", "SuccessfulCreate", "ScalingReplicaSet":
 		// Normal operations that should not be logged as events
 		return "IGNORE"
 	default:
@@ -377,11 +377,11 @@ func (bea *BasicEventMonitorAgent) writeCriticalEvent(obj *corev1.ObjectReferenc
 		"eventType": eventType,
 		"message":   message,
 	}).Error("CRITICAL_EVENT")
-	
+
 	// Write critical event to dedicated file in the logger's path
 	logPath := filepath.Join("logs", "basic", obj.Namespace)
 	criticalLogPath := filepath.Join(logPath, "critical_events.log")
-	
+
 	criticalLogFile, err := os.OpenFile(criticalLogPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
 	if err == nil {
 		defer criticalLogFile.Close()
@@ -395,8 +395,8 @@ func (bea *BasicEventMonitorAgent) writeCriticalEvent(obj *corev1.ObjectReferenc
 				"event":   eventType,
 				"message": message,
 			},
-			Level: logrus.ErrorLevel,
-			Time:  time.Now(),
+			Level:   logrus.ErrorLevel,
+			Time:    time.Now(),
 			Message: "CRITICAL_EVENT_LOG",
 		}
 

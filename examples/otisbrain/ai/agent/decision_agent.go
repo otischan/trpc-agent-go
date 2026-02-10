@@ -18,9 +18,9 @@ import (
 
 // AIDecisionAgent implements the AI decision-making functionality
 type AIDecisionAgent struct {
-	config    *config.Config
-	runner    runner.Runner
-	stopCh    chan struct{}
+	config *config.Config
+	runner runner.Runner
+	stopCh chan struct{}
 }
 
 // NewAIDecisionAgent creates a new AI decision agent
@@ -65,7 +65,7 @@ func makeDecision(ctx context.Context, req makeDecisionReq) (makeDecisionRsp, er
 	log.Printf("Making decision for issue: %s in namespace: %s", req.Issue, req.Namespace)
 
 	// In a real implementation, this would analyze the issue and make a decision
-	decision := fmt.Sprintf("Recommended action for issue '%s' in namespace '%s': %s", 
+	decision := fmt.Sprintf("Recommended action for issue '%s' in namespace '%s': %s",
 		req.Issue, req.Namespace, req.SuggestedAction)
 
 	return makeDecisionRsp{
